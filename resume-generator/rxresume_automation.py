@@ -96,7 +96,7 @@ def generate_resume_pdf(
     print(f"   JSON source: {actual_json_path}")
 
     with sync_playwright() as playwright:
-        browser = playwright.chromium.launch(headless=True)
+        browser = playwright.firefox.launch(headless=True)
         context = browser.new_context()
         page = context.new_page()
 
