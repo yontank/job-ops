@@ -1,4 +1,4 @@
-/**
+﻿/**
  * Service for running the UK Visa Jobs extractor (extractors/ukvisajobs).
  * 
  * Spawns the extractor as a child process and reads its output dataset.
@@ -13,6 +13,14 @@ import type { CreateJobInput } from '../../shared/types.js';
 const __dirname = dirname(fileURLToPath(import.meta.url));
 const UKVISAJOBS_DIR = join(__dirname, '../../../../extractors/ukvisajobs');
 const STORAGE_DIR = join(UKVISAJOBS_DIR, 'storage/datasets/default');
+const AUTH_CACHE_PATH = join(UKVISAJOBS_DIR, 'storage/ukvisajobs-auth.json');
+
+interface UkVisaJobsAuthSession {
+    token?: string;
+    authToken?: string;
+    csrfToken?: string;
+    ciSession?: string;
+}
 
 export interface RunUkVisaJobsOptions {
     /** Maximum number of jobs to fetch per search term. Defaults to 50, max 200. */
@@ -73,11 +81,11 @@ async function fetchJobDescription(url: string): Promise<string | null> {
     try {
         console.log(`      Fetching description from ${url}...`);
         
-        // Build cookies if present in env (similar to extractor)
+        const authSession = await loadCachedAuthSession();
         const cookieParts: string[] = [];
-        if (process.env.UKVISAJOBS_CSRF_TOKEN) cookieParts.push(`csrf_token=${process.env.UKVISAJOBS_CSRF_TOKEN}`);
-        if (process.env.UKVISAJOBS_CI_SESSION) cookieParts.push(`ci_session=${process.env.UKVISAJOBS_CI_SESSION}`);
-        const token = process.env.UKVISAJOBS_AUTH_TOKEN || process.env.UKVISAJOBS_TOKEN;
+        if (authSession?.csrfToken) cookieParts.push(`csrf_token=${authSession.csrfToken}`);
+        if (authSession?.ciSession) cookieParts.push(`ci_session=${authSession.ciSession}`);
+        const token = authSession?.authToken || authSession?.token;
         if (token) cookieParts.push(`authToken=${token}`);
         
         const headers: Record<string, string> = {
@@ -101,7 +109,16 @@ async function fetchJobDescription(url: string): Promise<string | null> {
         // If we only got a tiny bit of text, it might have failed
         return cleaned.length > 100 ? cleaned : null;
     } catch (error) {
-        console.warn(`      ⚠️ Failed to fetch description: ${error instanceof Error ? error.message : 'Unknown error'}`);
+        console.warn(`      âš ï¸ Failed to fetch description: ${error instanceof Error ? error.message : 'Unknown error'}`);
+        return null;
+    }
+}
+
+async function loadCachedAuthSession(): Promise<UkVisaJobsAuthSession | null> {
+    try {
+        const data = await readFile(AUTH_CACHE_PATH, 'utf-8');
+        return JSON.parse(data) as UkVisaJobsAuthSession;
+    } catch {
         return null;
     }
 }
@@ -118,7 +135,7 @@ async function clearStorageDataset(): Promise<void> {
 }
 
 export async function runUkVisaJobs(options: RunUkVisaJobsOptions = {}): Promise<UkVisaJobsResult> {
-    console.log('🇬🇧 Running UK Visa Jobs extractor...');
+    console.log('ðŸ‡¬ðŸ‡§ Running UK Visa Jobs extractor...');
 
     // Determine terms to run
     const terms: string[] = [];
@@ -192,11 +209,11 @@ export async function runUkVisaJobs(options: RunUkVisaJobsOptions = {}): Promise
                 }
             }
 
-            console.log(`   ✅ Fetched ${runJobs.length} jobs for ${termLabel} (${newCount} new unique)`);
+            console.log(`   âœ… Fetched ${runJobs.length} jobs for ${termLabel} (${newCount} new unique)`);
 
         } catch (error) {
             const message = error instanceof Error ? error.message : 'Unknown error';
-            console.error(`❌ UK Visa Jobs failed for ${termLabel}: ${message}`);
+            console.error(`âŒ UK Visa Jobs failed for ${termLabel}: ${message}`);
             // Continue to next term instead of failing completely
         }
 
@@ -207,7 +224,7 @@ export async function runUkVisaJobs(options: RunUkVisaJobsOptions = {}): Promise
         }
     }
 
-    console.log(`✅ UK Visa Jobs: imported total ${allJobs.length} unique jobs`);
+    console.log(`âœ… UK Visa Jobs: imported total ${allJobs.length} unique jobs`);
     return { success: true, jobs: allJobs };
 }
 
@@ -254,3 +271,4 @@ async function readDataset(): Promise<CreateJobInput[]> {
 
     return jobs;
 }
+

@@ -1,25 +1,28 @@
-/**
+﻿/**
  * UK Visa Jobs Extractor
  * 
  * Fetches job listings from my.ukvisajobs.com that may sponsor work visas.
  * Outputs JSON to stdout for the orchestrator to consume.
  * 
  * Environment variables:
- *   UKVISAJOBS_TOKEN - JWT token (required)
- *   UKVISAJOBS_AUTH_TOKEN - Auth cookie token (defaults to UKVISAJOBS_TOKEN)
- *   UKVISAJOBS_CSRF_TOKEN - CSRF token cookie
- *   UKVISAJOBS_CI_SESSION - CI session cookie
+ *   UKVISAJOBS_EMAIL - Login email for auto-refresh
+ *   UKVISAJOBS_PASSWORD - Login password for auto-refresh
+ *   UKVISAJOBS_HEADLESS - Set to "false" to show the browser (default: true)
  *   UKVISAJOBS_MAX_JOBS - Maximum jobs to fetch (default: 50, max: 200) - Set via UI Settings
  *   UKVISAJOBS_SEARCH_KEYWORD - Optional search filter
  */
 
-import { mkdir, writeFile } from 'fs/promises';
+import { mkdir, writeFile, readFile } from 'fs/promises';
 import { join, dirname } from 'path';
 import { fileURLToPath } from 'url';
+import type { Request } from 'playwright';
 
 const __dirname = dirname(fileURLToPath(import.meta.url));
 
 const API_URL = 'https://my.ukvisajobs.com/ukvisa-api/api/fetch-jobs-data';
+const SIGNIN_URL = 'https://my.ukvisajobs.com/signin';
+const OPEN_JOBS_URL = 'https://my.ukvisajobs.com/open-jobs/1?is_global=0&sortBy=desc&visaAcceptance=false&applicants_outside_uk=false&pageNo=1';
+const AUTH_CACHE_PATH = join(__dirname, '../storage/ukvisajobs-auth.json');
 const JOBS_PER_PAGE = 15;
 const DEFAULT_MAX_JOBS = 50;
 const MAX_ALLOWED_JOBS = 200;
@@ -77,6 +80,27 @@ interface ExtractedJob {
     jobLevel?: string;
 }
 
+interface UkVisaJobsAuthSession {
+    token: string;
+    authToken: string;
+    csrfToken: string;
+    ciSession: string;
+    fetchedAt: string;
+    source: 'cache' | 'browser';
+}
+
+class UkVisaJobsAuthError extends Error {
+    status: number;
+    responseText: string;
+
+    constructor(message: string, status: number, responseText: string) {
+        super(message);
+        this.name = 'UkVisaJobsAuthError';
+        this.status = status;
+        this.responseText = responseText;
+    }
+}
+
 function toStringOrNull(value: unknown): string | null {
     if (value === null || value === undefined) return null;
     if (typeof value === 'string') {
@@ -101,8 +125,7 @@ function toNumberOrNull(value: unknown): number | null {
 
 async function fetchPage(
     pageNo: number,
-    token: string,
-    cookies: string,
+    session: UkVisaJobsAuthSession,
     options: { searchKeyword?: string } = {}
 ): Promise<UkVisaJobsApiResponse> {
     // Use native FormData API (Node.js 18+)
@@ -113,7 +136,9 @@ async function fetchPage(
     formData.append('visaAcceptance', 'false');
     formData.append('applicants_outside_uk', 'false');
     formData.append('searchKeyword', options.searchKeyword || 'null');
-    formData.append('token', token);
+    formData.append('token', session.token);
+
+    const cookies = buildCookieHeader(session);
 
     const response = await fetch(API_URL, {
         method: 'POST',
@@ -130,6 +155,13 @@ async function fetchPage(
 
     if (!response.ok) {
         const text = await response.text();
+        if (isAuthErrorResponse(response.status, text)) {
+            throw new UkVisaJobsAuthError(
+                `UKVisaJobs API returned ${response.status}: ${response.statusText} - ${text}`,
+                response.status,
+                text
+            );
+        }
         throw new Error(`UKVisaJobs API returned ${response.status}: ${response.statusText} - ${text}`);
     }
 
@@ -143,12 +175,12 @@ function mapJob(raw: UkVisaJobsApiJob): ExtractedJob {
     const maxSalary = toNumberOrNull(raw.max_salary);
 
     if (minSalary !== null && minSalary > 0 && maxSalary !== null && maxSalary > 0) {
-        salary = `£${minSalary.toLocaleString()}-${maxSalary.toLocaleString()}`;
+        salary = `Â£${minSalary.toLocaleString()}-${maxSalary.toLocaleString()}`;
         if (raw.salary_interval) {
             salary += ` / ${raw.salary_interval}`;
         }
     } else if (maxSalary !== null && maxSalary > 0) {
-        salary = `£${maxSalary.toLocaleString()}`;
+        salary = `Â£${maxSalary.toLocaleString()}`;
         if (raw.salary_interval) {
             salary += ` / ${raw.salary_interval}`;
         }
@@ -188,30 +220,181 @@ function mapJob(raw: UkVisaJobsApiJob): ExtractedJob {
     };
 }
 
-async function main(): Promise<void> {
-    console.log('🇬🇧 UK Visa Jobs Extractor starting...');
+function buildCookieHeader(session: UkVisaJobsAuthSession): string {
+    const cookieParts: string[] = [];
+    if (session.csrfToken) cookieParts.push(`csrf_token=${session.csrfToken}`);
+    if (session.ciSession) cookieParts.push(`ci_session=${session.ciSession}`);
+    if (session.authToken) cookieParts.push(`authToken=${session.authToken}`);
+    return cookieParts.join('; ');
+}
 
-    // Get credentials from environment
-    const token = process.env.UKVISAJOBS_TOKEN;
-    const authToken = process.env.UKVISAJOBS_AUTH_TOKEN || token;
-    const csrfToken = process.env.UKVISAJOBS_CSRF_TOKEN || '';
-    const ciSession = process.env.UKVISAJOBS_CI_SESSION || '';
+function getLoginCredentials(): { email: string; password: string } | null {
+    const email = process.env.UKVISAJOBS_EMAIL;
+    const password = process.env.UKVISAJOBS_PASSWORD;
+    if (!email || !password) return null;
+    return { email, password };
+}
+
+async function loadCachedAuthSession(): Promise<UkVisaJobsAuthSession | null> {
+    try {
+        const data = await readFile(AUTH_CACHE_PATH, 'utf8');
+        const parsed = JSON.parse(data) as UkVisaJobsAuthSession;
+        if (!parsed?.token) return null;
+        return {
+            token: parsed.token,
+            authToken: parsed.authToken || parsed.token,
+            csrfToken: parsed.csrfToken || '',
+            ciSession: parsed.ciSession || '',
+            fetchedAt: parsed.fetchedAt || new Date().toISOString(),
+            source: 'cache',
+        };
+    } catch (error) {
+        return null;
+    }
+}
+
+async function saveCachedAuthSession(session: UkVisaJobsAuthSession): Promise<void> {
+    const payload = {
+        token: session.token,
+        authToken: session.authToken,
+        csrfToken: session.csrfToken,
+        ciSession: session.ciSession,
+        fetchedAt: session.fetchedAt,
+        source: session.source,
+    };
+    await mkdir(dirname(AUTH_CACHE_PATH), { recursive: true });
+    await writeFile(AUTH_CACHE_PATH, JSON.stringify(payload, null, 2));
+}
+
+function extractMultipartField(body: string, field: string): string | null {
+    const nameToken = `name="${field}"`;
+    const index = body.indexOf(nameToken);
+    if (index === -1) return null;
+
+    const afterName = body.slice(index + nameToken.length);
+    let separatorIndex = afterName.indexOf('\r\n\r\n');
+    let separatorLength = 4;
+    if (separatorIndex === -1) {
+        separatorIndex = afterName.indexOf('\n\n');
+        separatorLength = 2;
+    }
+    if (separatorIndex === -1) return null;
+
+    const valueStart = index + nameToken.length + separatorIndex + separatorLength;
+    const remainder = body.slice(valueStart);
+    const endIndex = remainder.indexOf('\r\n');
+    if (endIndex === -1) return remainder.trim();
+    return remainder.slice(0, endIndex).trim();
+}
+
+function extractTokenFromRequest(request: Request): string | null {
+    const postData = request.postData();
+    if (!postData) return null;
+    const multipartToken = extractMultipartField(postData, 'token');
+    if (multipartToken) return multipartToken;
+    try {
+        const params = new URLSearchParams(postData);
+        const token = params.get('token');
+        return token || null;
+    } catch (error) {
+        return null;
+    }
+}
+
+function isAuthErrorResponse(status: number, bodyText: string): boolean {
+    if (status === 401 || status === 403) return true;
+    if (status !== 400) return false;
+    try {
+        const parsed = JSON.parse(bodyText) as { errorType?: string; message?: string };
+        if (parsed?.errorType === 'expired') return true;
+        if (parsed?.message && parsed.message.toLowerCase().includes('expired')) return true;
+    } catch (error) {
+        // ignore JSON parse failures
+    }
+    return bodyText.toLowerCase().includes('expired');
+}
+
+async function loginWithBrowser(email: string, password: string): Promise<UkVisaJobsAuthSession> {
+    const [{ launchOptions }, { firefox }] = await Promise.all([
+        import('camoufox-js'),
+        import('playwright'),
+    ]);
+    const headless = process.env.UKVISAJOBS_HEADLESS !== 'false';
+    const browser = await firefox.launch(await launchOptions({
+        headless,
+        humanize: true,
+        geoip: true,
+    }));
+    const context = await browser.newContext();
+    const page = await context.newPage();
+
+    try {
+        await page.goto(SIGNIN_URL, { waitUntil: 'domcontentloaded' });
+        await page.waitForSelector('#email', { timeout: 15000 });
+        await page.fill('#email', email);
+        await page.fill('#password', password);
+        await page.keyboard.press('Enter');
+        await page.waitForTimeout(7000);
+
+        const requestPromise = page.waitForRequest(
+            (request) => request.url().includes('/ukvisa-api/api/fetch-jobs-data') && request.method() === 'POST',
+            { timeout: 30000 }
+        );
+
+        await page.goto(OPEN_JOBS_URL, { waitUntil: 'networkidle' });
+        await page.waitForTimeout(5000);
+
+        let fetchRequest: Request | null = null;
+        try {
+            fetchRequest = await requestPromise;
+        } catch (error) {
+            fetchRequest = null;
+        }
+
+        const cookies = await context.cookies('https://my.ukvisajobs.com');
+        const csrfToken = cookies.find((cookie) => cookie.name === 'csrf_token')?.value || '';
+        const ciSession = cookies.find((cookie) => cookie.name === 'ci_session')?.value || '';
+        const authToken = cookies.find((cookie) => cookie.name === 'authToken')?.value || '';
+        const token = fetchRequest ? extractTokenFromRequest(fetchRequest) : authToken;
+
+        if (!token) {
+            throw new Error('Failed to locate auth token from browser session.');
+        }
+
+        return {
+            token,
+            authToken: authToken || token,
+            csrfToken,
+            ciSession,
+            fetchedAt: new Date().toISOString(),
+            source: 'browser',
+        };
+    } finally {
+        await browser.close();
+    }
+}
+
+async function main(): Promise<void> {
+    console.log('ðŸ‡¬ðŸ‡§ UK Visa Jobs Extractor starting...');
+    const credentials = getLoginCredentials();
     const searchKeyword = process.env.UKVISAJOBS_SEARCH_KEYWORD || undefined;
 
-    if (!token) {
-        console.error('❌ UKVISAJOBS_TOKEN environment variable is not set');
-        process.exit(1);
+    let authSession = await loadCachedAuthSession();
+
+    if (!authSession) {
+        if (!credentials) {
+            console.error('ERROR: UKVISAJOBS_EMAIL and UKVISAJOBS_PASSWORD must be set');
+            process.exit(1);
+        }
+        console.log('   No cached session found. Logging in to refresh tokens...');
+        authSession = await loginWithBrowser(credentials.email, credentials.password);
+        await saveCachedAuthSession(authSession);
     }
 
-    // Build cookies string
-    const cookieParts: string[] = [];
-    if (csrfToken) cookieParts.push(`csrf_token=${csrfToken}`);
-    if (ciSession) cookieParts.push(`ci_session=${ciSession}`);
-    if (authToken) cookieParts.push(`authToken=${authToken}`);
-    const cookies = cookieParts.join('; ');
-
-    console.log(`   Cookies configured: ${cookieParts.length > 0 ? 'Yes' : 'No'}`);
-    console.log(`   Token length: ${token.length}`);
+    const cookies = buildCookieHeader(authSession);
+    console.log(`   Auth source: ${authSession.source}`);
+    console.log(`   Cookies configured: ${cookies ? 'Yes' : 'No'}`);
+    console.log(`   Token length: ${authSession.token.length}`);
 
     // Get max jobs from environment
     const maxJobsEnv = toNumberOrNull(process.env.UKVISAJOBS_MAX_JOBS);
@@ -232,10 +415,25 @@ async function main(): Promise<void> {
         while (pageNo <= maxPages && allJobs.length < maxJobs) {
             console.log(`   Fetching page ${pageNo}/${maxPages}...`);
 
-            const response = await fetchPage(pageNo, token, cookies, { searchKeyword });
+            let response: UkVisaJobsApiResponse;
+            try {
+                response = await fetchPage(pageNo, authSession, { searchKeyword });
+            } catch (error) {
+                if (error instanceof UkVisaJobsAuthError) {
+                    if (!credentials) {
+                        throw new Error('UKVisaJobs auth expired. Set UKVISAJOBS_EMAIL and UKVISAJOBS_PASSWORD to refresh.');
+                    }
+                    console.log('   Auth expired. Refreshing tokens...');
+                    authSession = await loginWithBrowser(credentials.email, credentials.password);
+                    await saveCachedAuthSession(authSession);
+                    response = await fetchPage(pageNo, authSession, { searchKeyword });
+                } else {
+                    throw error;
+                }
+            }
 
             if (response.status !== 1) {
-                console.warn(`   ⚠️ API returned status ${response.status} on page ${pageNo}`);
+                console.warn(`   âš ï¸ API returned status ${response.status} on page ${pageNo}`);
                 break;
             }
 
@@ -271,7 +469,7 @@ async function main(): Promise<void> {
             await new Promise((resolve) => setTimeout(resolve, 500));
         }
 
-        console.log(`✅ Scraped ${allJobs.length} jobs`);
+        console.log(`âœ… Scraped ${allJobs.length} jobs`);
 
         // Write output to storage directory (similar to Crawlee dataset structure)
         const storageDir = join(__dirname, '../storage/datasets/default');
@@ -292,7 +490,7 @@ async function main(): Promise<void> {
 
     } catch (error) {
         const message = error instanceof Error ? error.message : 'Unknown error';
-        console.error(`❌ Error: ${message}`);
+        console.error(`âŒ Error: ${message}`);
         process.exit(1);
     }
 }
@@ -301,3 +499,6 @@ main().catch((error) => {
     console.error('Fatal error:', error);
     process.exit(1);
 });
+
+
+

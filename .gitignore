@@ -5,6 +5,9 @@
 # Data directory (bind mount in Docker)
 data/
 
+# Extractor storage outputs and cached auth
+extractors/ukvisajobs/storage/
+
 # OS files
 .DS_Store
 Thumbs.db

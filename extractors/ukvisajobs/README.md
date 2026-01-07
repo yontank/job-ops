@@ -1,4 +1,4 @@
-# UK Visa Jobs Extractor
+﻿# UK Visa Jobs Extractor
 
 Fetches job listings from [my.ukvisajobs.com](https://my.ukvisajobs.com) that may sponsor work visas.
 
@@ -8,28 +8,38 @@ Fetches job listings from [my.ukvisajobs.com](https://my.ukvisajobs.com) that ma
 npm install
 ```
 
+If Playwright browsers are skipped in your environment, install Firefox:
+
+```bash
+npx playwright install firefox
+```
+
+If Camoufox assets are missing, fetch them:
+
+```bash
+npx camoufox-js fetch
+```
+
 ## Configuration
 
-Set the following environment variables (you can get these from your browser's dev tools after logging in):
+Set the following environment variables:
 
 | Variable | Description |
 |----------|-------------|
-| `UKVISAJOBS_TOKEN` | JWT token from the request body (required) |
-| `UKVISAJOBS_AUTH_TOKEN` | Auth cookie token (defaults to UKVISAJOBS_TOKEN) |
-| `UKVISAJOBS_CSRF_TOKEN` | CSRF token from cookies |
-| `UKVISAJOBS_CI_SESSION` | CI session ID from cookies |
+| `UKVISAJOBS_EMAIL` | Login email for automatic token refresh |
+| `UKVISAJOBS_PASSWORD` | Login password for automatic token refresh |
+| `UKVISAJOBS_HEADLESS` | Set to `false` to show the browser (default: true) |
 | `UKVISAJOBS_MAX_JOBS` | Maximum jobs to fetch (default: 50, max: 200) |
 | `UKVISAJOBS_SEARCH_KEYWORD` | Optional search filter |
 
-## How to get tokens
+## Automatic login & cache
 
-1. Log into `my.ukvisajobs.com` in your browser
-2. Open Developer Tools → Network tab
-3. Navigate to the jobs page
-4. Find the `fetch-jobs-data` POST request
-5. Copy values:
-   - From **Request Body**: copy the `token` field → `UKVISAJOBS_TOKEN`
-   - From **Cookies**: copy `authToken`, `csrf_token`, `ci_session`
+The extractor will:
+
+1. Launch a Camoufox (Playwright Firefox) browser and sign in
+2. Navigate to the open jobs page and capture the token/cookies
+3. Cache the session to `storage/ukvisajobs-auth.json`
+4. Reuse the cached values until the API reports an expired token, then refresh
 
 ## Running
 
@@ -38,3 +48,4 @@ npm start
 ```
 
 Output is written to `storage/datasets/default/` as JSON files.
+
