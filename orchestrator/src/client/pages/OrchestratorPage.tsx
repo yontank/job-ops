@@ -8,14 +8,12 @@ import {
   Calendar,
   CheckCircle2,
   ChevronDown,
-  Clock,
   Copy,
   DollarSign,
   Edit2,
   ExternalLink,
   FileText,
   Filter,
-  GraduationCap,
   Loader2,
   MapPin,
   MoreHorizontal,
@@ -47,7 +45,6 @@ import {
   DropdownMenuTrigger,
 } from "@/components/ui/dropdown-menu";
 import { Input } from "@/components/ui/input";
-import { Separator } from "@/components/ui/separator";
 import { Tabs, TabsContent, TabsList, TabsTrigger } from "@/components/ui/tabs";
 import { Textarea } from "@/components/ui/textarea";
 import { cn } from "@/lib/utils";
@@ -252,31 +249,39 @@ const jobMatchesQuery = (job: Job, query: string) => {
 
 const stripHtml = (value: string) => value.replace(/<[^>]*>/g, " ").replace(/\s+/g, " ").trim();
 
+// Default fallback for unknown statuses
+const defaultStatusToken = {
+  label: "Unknown",
+  badge: "border-muted-foreground/20 bg-muted/30 text-muted-foreground",
+  dot: "bg-muted-foreground",
+};
+
+// Subdued status pill for inspector panel - not competing with list
 const StatusPill: React.FC<{ status: JobStatus }> = ({ status }) => {
-  const tokens = statusTokens[status];
+  const tokens = statusTokens[status] ?? defaultStatusToken;
   return (
     <span
       className={cn(
-        "inline-flex items-center gap-2 rounded-full border px-2.5 py-1 text-[11px] font-semibold uppercase tracking-wide",
-        tokens.badge,
+        "inline-flex items-center gap-1.5 text-[10px] font-medium uppercase tracking-wide text-muted-foreground/80",
       )}
     >
-      <span className={cn("h-1.5 w-1.5 rounded-full", tokens.dot)} />
+      <span className={cn("h-1.5 w-1.5 rounded-full opacity-80", tokens.dot)} />
       {tokens.label}
     </span>
   );
 };
 
+// Compact score meter for inspector panel
 const ScoreMeter: React.FC<{ score: number | null }> = ({ score }) => {
   if (score == null) {
-    return <span className="text-xs text-muted-foreground">Not scored</span>;
+    return <span className="text-[10px] text-muted-foreground/60">—</span>;
   }
 
   return (
-    <div className="flex items-center gap-2 text-xs text-muted-foreground">
-      <div className="h-1.5 w-16 rounded-full bg-muted/40">
+    <div className="flex items-center gap-1.5 text-[10px] text-muted-foreground/70">
+      <div className="h-1 w-12 rounded-full bg-muted/30">
         <div
-          className="h-1.5 rounded-full bg-primary/80"
+          className="h-1 rounded-full bg-primary/50"
           style={{ width: `${Math.max(4, Math.min(100, score))}%` }}
         />
       </div>
@@ -693,15 +698,9 @@ export const OrchestratorPage: React.FC = () => {
       </header>
 
       <main className="container mx-auto max-w-7xl space-y-6 px-4 py-6 pb-12">
-        <section className="space-y-3">
+        <section className="space-y-4">
           <div className="flex items-center justify-between">
-            <div className="space-y-1">
-              <h1 className="text-xl font-semibold tracking-tight">Pipeline console</h1>
-              <p className="text-sm text-muted-foreground">
-                Focused workspace with a split list/detail layout and icon-led actions.
-              </p>
-            </div>
-            <div className="text-sm text-muted-foreground">{totalJobs} total jobs</div>
+            <h1 className="text-2xl font-bold tracking-tight">Jobs</h1>
           </div>
 
           {isPipelineRunning && (
@@ -710,58 +709,55 @@ export const OrchestratorPage: React.FC = () => {
             </div>
           )}
 
-          <div className="grid overflow-hidden rounded-xl border border-border/60 bg-card/40 sm:grid-cols-3 lg:grid-cols-6">
-            {[
-              { label: "Discovered", value: stats.discovered },
-              { label: "Processing", value: stats.processing },
-              { label: "Ready", value: stats.ready },
-              { label: "Applied", value: stats.applied },
-              { label: "Skipped", value: stats.skipped },
-              { label: "Expired", value: stats.expired },
-            ].map((item, index) => (
-              <div
-                key={item.label}
-                className={cn(
-                  "flex flex-col justify-between gap-1 px-4 py-3",
-                  index > 0 && "border-t border-border/60 sm:border-t-0 sm:border-l",
-                  index > 0 && index % 3 === 0 && "sm:border-l-0 sm:border-t",
-                  index > 2 && "lg:border-t-0 lg:border-l",
-                )}
-              >
-                <span className="text-xs text-muted-foreground">{item.label}</span>
-                <span className="text-lg font-semibold tabular-nums">{item.value}</span>
-              </div>
-            ))}
+          {/* Compact metrics summary - demoted visual weight */}
+          <div className="flex flex-wrap items-center gap-x-4 gap-y-1 text-xs text-muted-foreground/80">
+            <span className="font-medium text-foreground/60">{totalJobs} jobs total</span>
+            <span className="text-border">•</span>
+            <span><span className="tabular-nums">{stats.ready}</span> ready</span>
+            <span className="text-border">•</span>
+            <span><span className="tabular-nums">{stats.discovered + stats.processing}</span> pending</span>
+            <span className="text-border">•</span>
+            <span><span className="tabular-nums">{stats.applied}</span> applied</span>
+            {(stats.skipped > 0 || stats.expired > 0) && (
+              <>
+                <span className="text-border">•</span>
+                <span className="text-muted-foreground/60"><span className="tabular-nums">{stats.skipped + stats.expired}</span> archived</span>
+              </>
+            )}
           </div>
         </section>
-        <section className="space-y-3">
+
+        {/* Main content: tabs/filters -> list/detail */}
+        <section className="space-y-4">
           <Tabs value={activeTab} onValueChange={(value) => setActiveTab(value as FilterTab)}>
             <div className="flex flex-col gap-3 lg:flex-row lg:items-center lg:justify-between">
               <TabsList className="h-9 w-full lg:w-auto">
                 {tabs.map((tab) => (
-                  <TabsTrigger key={tab.id} value={tab.id} className="flex-1 lg:flex-none">
+                  <TabsTrigger key={tab.id} value={tab.id} className="flex-1 lg:flex-none gap-1.5">
                     {tab.label}
-                    <span className="ml-2 text-xs tabular-nums text-muted-foreground">({counts[tab.id]})</span>
+                    {counts[tab.id] > 0 && (
+                      <span className="text-[10px] tabular-nums opacity-60">{counts[tab.id]}</span>
+                    )}
                   </TabsTrigger>
                 ))}
               </TabsList>
 
               <div className="flex flex-wrap items-center gap-2">
-                <div className="relative w-full min-w-[220px] flex-1 lg:flex-none">
-                  <Search className="absolute left-3 top-1/2 h-4 w-4 -translate-y-1/2 text-muted-foreground" />
+                <div className="relative w-full min-w-[180px] flex-1 lg:max-w-[240px] lg:flex-none">
+                  <Search className="absolute left-2.5 top-1/2 h-3.5 w-3.5 -translate-y-1/2 text-muted-foreground/60" />
                   <Input
                     value={searchQuery}
                     onChange={(event) => setSearchQuery(event.target.value)}
-                    placeholder="Filter jobs..."
-                    className="pl-9"
+                    placeholder="Search..."
+                    className="h-8 pl-8 text-sm"
                   />
                 </div>
 
                 <DropdownMenu>
                   <DropdownMenuTrigger asChild>
-                    <Button variant="outline" size="sm" className="h-9 gap-2">
-                      <Filter className="h-4 w-4" />
-                      Source: {sourceFilter === "all" ? "All" : sourceLabel[sourceFilter]}
+                    <Button variant="ghost" size="sm" className="h-8 gap-1.5 text-xs text-muted-foreground hover:text-foreground">
+                      <Filter className="h-3.5 w-3.5" />
+                      {sourceFilter === "all" ? "All sources" : sourceLabel[sourceFilter]}
                     </Button>
                   </DropdownMenuTrigger>
                   <DropdownMenuContent align="end" className="w-56">
@@ -783,9 +779,9 @@ export const OrchestratorPage: React.FC = () => {
 
                 <DropdownMenu>
                   <DropdownMenuTrigger asChild>
-                    <Button variant="outline" size="sm" className="h-9 gap-2">
-                      <ArrowUpDown className="h-4 w-4" />
-                      Sort: {sortLabels[sort.key]}
+                    <Button variant="ghost" size="sm" className="h-8 gap-1.5 text-xs text-muted-foreground hover:text-foreground">
+                      <ArrowUpDown className="h-3.5 w-3.5" />
+                      {sortLabels[sort.key]}
                     </Button>
                   </DropdownMenuTrigger>
                   <DropdownMenuContent align="end" className="w-56">
@@ -820,19 +816,18 @@ export const OrchestratorPage: React.FC = () => {
                   </DropdownMenuContent>
                 </DropdownMenu>
 
-                <Badge variant="outline" className="h-9 px-3 text-xs tabular-nums text-muted-foreground">
-                  {activeResultsCount} jobs
-                </Badge>
               </div>
             </div>
           </Tabs>
-        </section>
-        <section className="grid gap-4 lg:grid-cols-[minmax(0,1fr)_minmax(0,420px)]">
-          <div className="rounded-xl border border-border/60 bg-card/40">
-            {isLoading && jobs.length === 0 ? (
-              <div className="flex flex-col items-center justify-center gap-3 px-6 py-12 text-center">
-                <Loader2 className="h-8 w-8 animate-spin text-muted-foreground" />
-                <div className="text-sm text-muted-foreground">Loading jobs...</div>
+
+          {/* List/Detail grid - directly under tabs, no extra section */}
+          <div className="grid gap-4 lg:grid-cols-[minmax(0,1fr)_minmax(0,380px)]">
+            {/* Primary region: Job list with highest visual weight */}
+            <div className="rounded-xl border border-border bg-card shadow-sm">
+              {isLoading && jobs.length === 0 ? (
+                <div className="flex flex-col items-center justify-center gap-3 px-6 py-12 text-center">
+                  <Loader2 className="h-8 w-8 animate-spin text-muted-foreground" />
+                  <div className="text-sm text-muted-foreground">Loading jobs...</div>
               </div>
             ) : activeJobs.length === 0 ? (
               <div className="flex flex-col items-center justify-center gap-2 px-6 py-12 text-center">
@@ -842,51 +837,61 @@ export const OrchestratorPage: React.FC = () => {
                 </p>
               </div>
             ) : (
-              <div className="divide-y divide-border/60">
+              <div className="divide-y divide-border/40">
                 {activeJobs.map((job) => {
                   const isSelected = job.id === selectedJobId;
+                  const hasScore = job.suitabilityScore != null;
+                  const statusToken = statusTokens[job.status] ?? defaultStatusToken;
                   return (
                     <button
                       key={job.id}
                       type="button"
                       onClick={() => setSelectedJobId(job.id)}
                       className={cn(
-                        "flex w-full items-start gap-4 px-4 py-3 text-left transition-colors",
-                        isSelected ? "bg-muted/40" : "hover:bg-muted/30",
+                        "flex w-full items-center gap-3 px-4 py-3 text-left transition-colors",
+                        isSelected 
+                          ? "bg-primary/5 border-l-2 border-l-primary" 
+                          : "hover:bg-muted/20 border-l-2 border-l-transparent",
                       )}
                       aria-pressed={isSelected}
                     >
-                      <span className={cn("mt-1 h-2.5 w-2.5 rounded-full", statusTokens[job.status].dot)} />
-                      <div className="min-w-0 flex-1 space-y-1">
-                        <div className="truncate text-sm font-semibold">{job.title}</div>
-                        <div className="text-xs text-muted-foreground">{job.employer}</div>
-                        <div className="flex flex-wrap items-center gap-2 text-xs text-muted-foreground">
-                          {job.location && (
-                            <span className="flex items-center gap-1">
-                              <MapPin className="h-3.5 w-3.5" />
-                              {job.location}
-                            </span>
-                          )}
-                          {job.deadline && (
-                            <span className="flex items-center gap-1">
-                              <Calendar className="h-3.5 w-3.5" />
-                              {formatDate(job.deadline)}
-                            </span>
-                          )}
-                          {job.discoveredAt && (
-                            <span className="flex items-center gap-1">
-                              <Clock className="h-3.5 w-3.5" />
-                              Discovered {formatDateTime(job.discoveredAt)}
-                            </span>
-                          )}
+                      {/* Single status indicator: subtle dot */}
+                      <span 
+                        className={cn(
+                          "h-2 w-2 rounded-full shrink-0", 
+                          statusToken.dot,
+                          !isSelected && "opacity-70"
+                        )} 
+                        title={statusToken.label}
+                      />
+                      
+                      {/* Primary content: title strongest, company secondary */}
+                      <div className="min-w-0 flex-1">
+                        <div className={cn(
+                          "truncate text-sm leading-tight",
+                          isSelected ? "font-semibold" : "font-medium"
+                        )}>
+                          {job.title}
+                        </div>
+                        <div className="truncate text-xs text-muted-foreground mt-0.5">
+                          {job.employer}
+                          {job.location && <span className="before:content-['_·_']">{job.location}</span>}
                         </div>
                       </div>
-                      <div className="flex flex-col items-end gap-2">
-                        <ScoreMeter score={job.suitabilityScore} />
-                        <span className="text-[11px] font-semibold uppercase tracking-wide text-muted-foreground">
-                          {statusTokens[job.status].label}
-                        </span>
-                      </div>
+                      
+                      {/* Single triage cue: score only (status shown via dot) */}
+                      {hasScore && (
+                        <div className="shrink-0 text-right">
+                          <span className={cn(
+                            "text-xs tabular-nums",
+                            job.suitabilityScore! >= 70 ? "text-emerald-400/90" :
+                            job.suitabilityScore! >= 50 ? "text-foreground/60" :
+                            "text-muted-foreground/60"
+                          )}>
+                            {job.suitabilityScore}
+                          </span>
+                        </div>
+                      )}
                     </button>
                   );
                 })}
@@ -894,115 +899,102 @@ export const OrchestratorPage: React.FC = () => {
             )}
           </div>
 
-          <div className="rounded-xl border border-border/60 bg-card/40 p-4 lg:sticky lg:top-24 lg:self-start">
+          {/* Inspector panel: visually subordinate to list */}
+          <div className="rounded-lg border border-border/40 bg-muted/5 p-4 lg:sticky lg:top-24 lg:self-start">
             {!selectedJob ? (
-              <div className="flex h-full flex-col items-center justify-center gap-2 text-center">
-                <div className="text-base font-semibold">Select a job</div>
-                <p className="text-sm text-muted-foreground">Pick a job from the list to see details here.</p>
+              <div className="flex h-full min-h-[200px] flex-col items-center justify-center gap-1 text-center">
+                <div className="text-sm font-medium text-muted-foreground">No job selected</div>
+                <p className="text-xs text-muted-foreground/70">Select a job to view details</p>
               </div>
             ) : (
-              <div className="space-y-4">
-                <div className="flex flex-wrap items-start justify-between gap-3">
+              <div className="space-y-3">
+                {/* Detail header: lighter weight than list items */}
+                <div className="flex flex-wrap items-start justify-between gap-2">
                   <div className="min-w-0">
-                    <div className="truncate text-base font-semibold">{selectedJob.title}</div>
-                    <div className="text-sm text-muted-foreground">{selectedJob.employer}</div>
+                    <div className="truncate text-sm font-semibold text-foreground/90">{selectedJob.title}</div>
+                    <div className="text-xs text-muted-foreground">{selectedJob.employer}</div>
                   </div>
-                  <div className="flex flex-wrap items-center gap-2">
-                    <Badge variant="outline" className="uppercase tracking-wide">
-                      {sourceLabel[selectedJob.source]}
-                    </Badge>
-                    <StatusPill status={selectedJob.status} />
-                  </div>
+                  <Badge variant="outline" className="text-[10px] uppercase tracking-wide text-muted-foreground border-border/50">
+                    {sourceLabel[selectedJob.source]}
+                  </Badge>
                 </div>
 
-                <div className="flex flex-wrap items-center gap-3 text-xs text-muted-foreground">
+                {/* Tertiary metadata - subdued */}
+                <div className="flex flex-wrap items-center gap-x-3 gap-y-1 text-[11px] text-muted-foreground/70">
                   {selectedJob.location && (
                     <span className="flex items-center gap-1">
-                      <MapPin className="h-3.5 w-3.5" />
+                      <MapPin className="h-3 w-3" />
                       {selectedJob.location}
                     </span>
                   )}
                   {selectedDeadline && (
                     <span className="flex items-center gap-1">
-                      <Calendar className="h-3.5 w-3.5" />
+                      <Calendar className="h-3 w-3" />
                       {selectedDeadline}
-                    </span>
-                  )}
-                  {selectedDiscoveredAt && (
-                    <span className="flex items-center gap-1">
-                      <Clock className="h-3.5 w-3.5" />
-                      Discovered {selectedDiscoveredAt}
                     </span>
                   )}
                   {selectedJob.salary && (
                     <span className="flex items-center gap-1">
-                      <DollarSign className="h-3.5 w-3.5" />
+                      <DollarSign className="h-3 w-3" />
                       {selectedJob.salary}
                     </span>
                   )}
-                  {selectedJob.degreeRequired && (
-                    <span className="flex items-center gap-1">
-                      <GraduationCap className="h-3.5 w-3.5" />
-                      {selectedJob.degreeRequired}
-                    </span>
-                  )}
                 </div>
 
-                <div className="flex items-center gap-2 text-sm text-muted-foreground">
-                  <span>Suitability</span>
+                {/* Status and score: single line, subdued */}
+                <div className="flex items-center justify-between gap-2 py-1 border-y border-border/30">
+                  <StatusPill status={selectedJob.status} />
                   <ScoreMeter score={selectedJob.suitabilityScore} />
                 </div>
 
-                <Separator />
-
-                <div className="flex flex-wrap items-center gap-2">
-                  <Button asChild size="sm" variant="outline" className="gap-2">
+                <div className="flex flex-wrap items-center gap-1.5">
+                  <Button asChild size="sm" variant="ghost" className="h-8 gap-1.5 text-xs">
                     <a href={selectedJobLink} target="_blank" rel="noopener noreferrer">
-                      <ExternalLink className="h-4 w-4" />
-                      View job
+                      <ExternalLink className="h-3.5 w-3.5" />
+                      View
                     </a>
                   </Button>
 
                   {showReadyPdf &&
                     (selectedHasPdf ? (
-                      <Button asChild size="sm" variant="outline" className="gap-2">
+                      <Button asChild size="sm" variant="ghost" className="h-8 gap-1.5 text-xs">
                         <a href={selectedPdfHref} target="_blank" rel="noopener noreferrer">
-                          <FileText className="h-4 w-4" />
-                          View PDF
+                          <FileText className="h-3.5 w-3.5" />
+                          PDF
                         </a>
                       </Button>
                     ) : (
-                      <Button size="sm" variant="outline" className="gap-2" disabled>
-                        <FileText className="h-4 w-4" />
-                        View PDF
+                      <Button size="sm" variant="ghost" className="h-8 gap-1.5 text-xs" disabled>
+                        <FileText className="h-3.5 w-3.5" />
+                        PDF
                       </Button>
                     ))}
 
                   {showGeneratePdf && (
                     <Button
                       size="sm"
-                      variant="secondary"
-                      className="gap-2"
+                      variant="outline"
+                      className="h-8 gap-1.5 text-xs"
                       onClick={() => handleProcess(selectedJob.id)}
                       disabled={!canProcess || isProcessingSelected}
                     >
                       {isProcessingSelected ? (
-                        <Loader2 className="h-4 w-4 animate-spin" />
+                        <Loader2 className="h-3.5 w-3.5 animate-spin" />
                       ) : (
-                        <RefreshCcw className="h-4 w-4" />
+                        <RefreshCcw className="h-3.5 w-3.5" />
                       )}
-                      {isProcessingSelected ? "Generating..." : "Generate PDF"}
+                      {isProcessingSelected ? "Generating..." : "Generate"}
                     </Button>
                   )}
 
                   {canApply && (
                     <Button
                       size="sm"
-                      className="gap-2 bg-emerald-500/15 text-emerald-200 hover:bg-emerald-500/25"
+                      className="h-8 gap-1.5 text-xs bg-emerald-600/20 text-emerald-300 hover:bg-emerald-600/30 border border-emerald-500/30"
                       onClick={() => handleApply(selectedJob.id)}
                     >
-                      <CheckCircle2 className="h-4 w-4" />
-                      Mark applied
+                      <CheckCircle2 className="h-3.5 w-3.5" />
+                      Applied
                     </Button>
                   )}
 
@@ -1076,69 +1068,55 @@ export const OrchestratorPage: React.FC = () => {
                   </DropdownMenu>
                 </div>
                 <Tabs value={detailTab} onValueChange={(value) => setDetailTab(value as typeof detailTab)}>
-                  <TabsList className="h-9">
-                    <TabsTrigger value="overview">Overview</TabsTrigger>
-                    <TabsTrigger value="tailoring">Tailoring</TabsTrigger>
-                    <TabsTrigger value="description">Description</TabsTrigger>
+                  <TabsList className="h-8 text-xs">
+                    <TabsTrigger value="overview" className="text-xs">Overview</TabsTrigger>
+                    <TabsTrigger value="tailoring" className="text-xs">Tailoring</TabsTrigger>
+                    <TabsTrigger value="description" className="text-xs">Description</TabsTrigger>
                   </TabsList>
 
-                  <TabsContent value="overview" className="space-y-3 pt-3">
-                    <div className="rounded-lg border border-border/60 bg-muted/20 p-3 text-sm text-muted-foreground">
-                      {selectedJob.suitabilityReason
-                        ? `"${selectedJob.suitabilityReason}"`
-                        : "No suitability summary yet."}
+                  <TabsContent value="overview" className="space-y-3 pt-2">
+                    {selectedJob.suitabilityReason && (
+                      <div className="rounded border border-border/30 bg-muted/10 px-3 py-2 text-xs text-muted-foreground italic">
+                        "{selectedJob.suitabilityReason}"
+                      </div>
+                    )}
+
+                    <div className="grid gap-2 text-xs sm:grid-cols-2">
+                      <div>
+                        <div className="text-[10px] text-muted-foreground/70 uppercase tracking-wide">Discipline</div>
+                        <div className="text-foreground/80">{selectedJob.disciplines || "—"}</div>
+                      </div>
+                      <div>
+                        <div className="text-[10px] text-muted-foreground/70 uppercase tracking-wide">Function</div>
+                        <div className="text-foreground/80">{selectedJob.jobFunction || "—"}</div>
+                      </div>
+                      <div>
+                        <div className="text-[10px] text-muted-foreground/70 uppercase tracking-wide">Level</div>
+                        <div className="text-foreground/80">{selectedJob.jobLevel || "—"}</div>
+                      </div>
+                      <div>
+                        <div className="text-[10px] text-muted-foreground/70 uppercase tracking-wide">Type</div>
+                        <div className="text-foreground/80">{selectedJob.jobType || "—"}</div>
+                      </div>
                     </div>
 
-                    <div className="grid gap-3 text-sm sm:grid-cols-2">
-                      <div>
-                        <div className="text-xs text-muted-foreground">Discipline</div>
-                        <div className="font-medium">{selectedJob.disciplines || "Not set"}</div>
-                      </div>
-                      <div>
-                        <div className="text-xs text-muted-foreground">Job function</div>
-                        <div className="font-medium">{selectedJob.jobFunction || "Not set"}</div>
-                      </div>
-                      <div>
-                        <div className="text-xs text-muted-foreground">Job level</div>
-                        <div className="font-medium">{selectedJob.jobLevel || "Not set"}</div>
-                      </div>
-                      <div>
-                        <div className="text-xs text-muted-foreground">Job type</div>
-                        <div className="font-medium">{selectedJob.jobType || "Not set"}</div>
-                      </div>
-                    </div>
-
-                    <Separator className="my-2" />
-
-                    <div className="space-y-2">
-                      <div className="flex items-center justify-between">
-                        <div className="text-xs font-semibold uppercase tracking-wide text-muted-foreground">
-                          Description Preview
-                        </div>
-                        <Button
-                          variant="link"
-                          size="sm"
-                          className="h-auto p-0 text-xs text-primary"
-                          onClick={() => {
-                            setDetailTab("description");
-                            setIsEditingDescription(true);
-                          }}
-                        >
-                          <Edit2 className="mr-1 h-3 w-3" />
-                          Edit full JD
-                        </Button>
-                      </div>
-                      <div className="rounded-md border border-border/40 bg-muted/5 p-3 text-xs text-muted-foreground line-clamp-6 whitespace-pre-wrap leading-relaxed">
-                        {description}
-                      </div>
-                      <Button
-                        variant="ghost"
-                        size="sm"
-                        className="w-full h-8 text-xs text-muted-foreground"
+                    <div className="space-y-1.5">
+                      <button
+                        type="button"
+                        className="w-full text-left rounded border border-border/30 bg-muted/5 px-2.5 py-2 text-[11px] text-muted-foreground/80 line-clamp-4 whitespace-pre-wrap leading-relaxed hover:bg-muted/10 transition-colors"
                         onClick={() => setDetailTab("description")}
                       >
-                        Read full description
-                      </Button>
+                        {description}
+                      </button>
+                      <div className="text-center">
+                        <button
+                          type="button"
+                          className="text-[10px] text-muted-foreground/60 hover:text-muted-foreground transition-colors"
+                          onClick={() => setDetailTab("description")}
+                        >
+                          View full description →
+                        </button>
+                      </div>
                     </div>
                   </TabsContent>
 
@@ -1266,6 +1244,7 @@ export const OrchestratorPage: React.FC = () => {
                 </Tabs>
               </div>
             )}
+          </div>
           </div>
         </section>
       </main>
