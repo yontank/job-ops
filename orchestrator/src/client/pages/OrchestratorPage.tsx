@@ -20,6 +20,7 @@ import {
   MapPin,
   MoreHorizontal,
   Play,
+  RefreshCcw,
   Save,
   Search,
   Settings,
@@ -828,7 +829,12 @@ export const OrchestratorPage: React.FC = () => {
         </section>
         <section className="grid gap-4 lg:grid-cols-[minmax(0,1fr)_minmax(0,420px)]">
           <div className="rounded-xl border border-border/60 bg-card/40">
-            {activeJobs.length === 0 ? (
+            {isLoading && jobs.length === 0 ? (
+              <div className="flex flex-col items-center justify-center gap-3 px-6 py-12 text-center">
+                <Loader2 className="h-8 w-8 animate-spin text-muted-foreground" />
+                <div className="text-sm text-muted-foreground">Loading jobs...</div>
+              </div>
+            ) : activeJobs.length === 0 ? (
               <div className="flex flex-col items-center justify-center gap-2 px-6 py-12 text-center">
                 <div className="text-base font-semibold">No jobs found</div>
                 <p className="max-w-md text-sm text-muted-foreground">
