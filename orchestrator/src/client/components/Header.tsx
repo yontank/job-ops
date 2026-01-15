@@ -10,6 +10,7 @@ import {
   RefreshCcw,
   Rocket,
   Settings,
+  Shield,
   Trash2,
 } from "lucide-react";
 import { Link } from "react-router-dom";
@@ -97,6 +98,17 @@ export const Header: React.FC<HeaderProps> = ({
           >
             <RefreshCcw className='h-4 w-4' />
             <span className='hidden sm:inline'>Refresh</span>
+          </Button>
+
+          <Button
+            asChild
+            variant='outline'
+            size='sm'
+          >
+            <Link to='/visa-sponsors'>
+              <Shield className='h-4 w-4' />
+              <span className='hidden sm:inline'>Visa Sponsors</span>
+            </Link>
           </Button>
 
           <Button

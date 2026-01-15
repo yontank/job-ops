@@ -8,6 +8,7 @@ import { join, dirname } from 'path';
 import { fileURLToPath } from 'url';
 import { config } from 'dotenv';
 import { apiRouter } from './api/index.js';
+import { initialize as initializeVisaSponsors } from './services/visa-sponsors/index.js';
 
 // Load environment variables from orchestrator root
 const __dirname = dirname(fileURLToPath(import.meta.url));
@@ -56,7 +57,7 @@ if (process.env.NODE_ENV === 'production') {
 }
 
 // Start server
-app.listen(PORT, () => {
+app.listen(PORT, async () => {
   console.log(`
 ╔═══════════════════════════════════════════════════════════╗
 ║                                                           ║
@@ -70,4 +71,11 @@ app.listen(PORT, () => {
 ║                                                           ║
 ╚═══════════════════════════════════════════════════════════╝
   `);
+
+  // Initialize visa sponsors service (downloads data if needed, starts scheduler)
+  try {
+    await initializeVisaSponsors();
+  } catch (error) {
+    console.warn('⚠️ Failed to initialize visa sponsors service:', error);
+  }
 });

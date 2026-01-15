@@ -11,9 +11,13 @@ import type {
   PipelineRun,
   AppSettings,
   ResumeProjectsSettings,
+  ResumeProjectCatalogItem,
   UkVisaJobsSearchResponse,
   UkVisaJobsImportResponse,
   CreateJobInput,
+  VisaSponsorSearchResponse,
+  VisaSponsorStatusResponse,
+  VisaSponsor,
 } from '../../shared/types';
 
 const API_BASE = '/api';
@@ -188,6 +192,38 @@ export async function deleteJobsByStatus(status: string): Promise<{
     count: number;
   }>(`/jobs/status/${status}`, {
     method: 'DELETE',
+  });
+}
+
+// Visa Sponsors API
+export async function getVisaSponsorStatus(): Promise<VisaSponsorStatusResponse> {
+  return fetchApi<VisaSponsorStatusResponse>('/visa-sponsors/status');
+}
+
+export async function searchVisaSponsors(input: {
+  query: string;
+  limit?: number;
+  minScore?: number;
+}): Promise<VisaSponsorSearchResponse> {
+  return fetchApi<VisaSponsorSearchResponse>('/visa-sponsors/search', {
+    method: 'POST',
+    body: JSON.stringify(input),
+  });
+}
+
+export async function getVisaSponsorOrganization(name: string): Promise<VisaSponsor[]> {
+  return fetchApi<VisaSponsor[]>(`/visa-sponsors/organization/${encodeURIComponent(name)}`);
+}
+
+export async function updateVisaSponsorList(): Promise<{
+  message: string;
+  status: VisaSponsorStatusResponse;
+}> {
+  return fetchApi<{
+    message: string;
+    status: VisaSponsorStatusResponse;
+  }>('/visa-sponsors/update', {
+    method: 'POST',
   });
 }
 
