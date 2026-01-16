@@ -20,6 +20,7 @@ Open `.env` and set at least:
 Optional but commonly used:
 - `RXRESUME_EMAIL`, `RXRESUME_PASSWORD` (for CV PDF generation)
 - `UKVISAJOBS_EMAIL`, `UKVISAJOBS_PASSWORD` (if you want to scrape UKVisaJobs)
+- `BASIC_AUTH_USER`, `BASIC_AUTH_PASSWORD` (read-only public, auth required for writes)
 
 ## 2) Provide a base resume JSON
 

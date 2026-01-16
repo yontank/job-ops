@@ -35,6 +35,11 @@ Essential variables in `.env`:
 
 Technical breakdowns here: `documentation/extractors/README.md`
 Orchestrator docs here: `documentation/orchestrator.md`
+
+## Read-only mode (Basic Auth)
+
+Set `BASIC_AUTH_USER` and `BASIC_AUTH_PASSWORD` in `.env` to make the app read-only for the public.
+All write actions (POST/PATCH/DELETE) require Basic Auth; browsing and viewing remain public.
 2. Put your exported RXResume JSON at `resume-generator/base.json`.
 3. Start: `docker compose up -d --build`
 4. Open:
