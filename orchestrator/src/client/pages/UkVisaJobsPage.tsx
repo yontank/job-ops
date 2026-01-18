@@ -409,7 +409,7 @@ export const UkVisaJobsPage: React.FC = () => {
           <form className="grid gap-4 md:grid-cols-[minmax(0,1fr)_160px]" onSubmit={handleSearch}>
             <div className="space-y-2">
               <label className="text-xs font-semibold uppercase tracking-wide text-muted-foreground">
-                Search term
+                Job title search term
               </label>
               <Input
                 value={searchTermInput}
@@ -417,9 +417,6 @@ export const UkVisaJobsPage: React.FC = () => {
                 placeholder="e.g. data analyst"
                 className="h-10"
               />
-              <p className="text-xs text-muted-foreground">
-                Single keyword or phrase. Leave blank to fetch the newest jobs.
-              </p>
             </div>
 
             <div className="flex items-end">
