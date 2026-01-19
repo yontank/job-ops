@@ -842,7 +842,11 @@ apiRouter.post('/manual-jobs/import', async (req: Request, res: Response) => {
     // Score asynchronously so the import returns immediately.
     (async () => {
       try {
-        const profile = (await loadResumeProfile()) as Record<string, unknown>;
+        const rawProfile = await loadResumeProfile();
+        if (!rawProfile || typeof rawProfile !== 'object' || Array.isArray(rawProfile)) {
+          throw new Error('Invalid resume profile format');
+        }
+        const profile = rawProfile as Record<string, unknown>;
         const { score, reason } = await scoreJobSuitability(createdJob, profile);
         await jobsRepo.updateJob(createdJob.id, {
           suitabilityScore: score,
