@@ -1,4 +1,4 @@
-# Job-Ops
+# JobOps
 
 AI-powered job discovery and application pipeline. Automatically finds jobs, scores them against your profile, and generates tailored resumes.
 
