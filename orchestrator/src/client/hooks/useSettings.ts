@@ -56,3 +56,10 @@ export function useSettings() {
         refreshSettings,
     };
 }
+
+/** @internal For testing only */
+export function _resetSettingsCache() {
+    settingsCache = null;
+    isFetching = false;
+    subscribers.clear();
+}
