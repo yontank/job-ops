@@ -3,7 +3,6 @@ import { describe, it, expect, vi, beforeEach } from "vitest";
 import { render, screen, fireEvent, waitFor } from "@testing-library/react";
 import { JobHeader } from "./JobHeader";
 import { useSettings } from "../hooks/useSettings";
-import * as api from "../api";
 import type { Job } from "../../shared/types";
 
 // Mock useSettings
