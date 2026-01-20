@@ -48,10 +48,14 @@ vi.mock("../../components/TailoringEditor", () => ({
   TailoringEditor: () => <div data-testid="tailoring-editor" />,
 }));
 
-vi.mock("@client/lib/jobCopy", () => ({
-  copyTextToClipboard: vi.fn().mockResolvedValue(undefined),
-  formatJobForWebhook: vi.fn(() => "payload"),
-}));
+vi.mock("@/lib/utils", async (importOriginal) => {
+  const actual = await importOriginal<typeof import("@/lib/utils")>();
+  return {
+    ...actual,
+    copyTextToClipboard: vi.fn().mockResolvedValue(undefined),
+    formatJobForWebhook: vi.fn(() => "payload"),
+  };
+});
 
 vi.mock("../../api", () => ({
   updateJob: vi.fn(),

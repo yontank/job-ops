@@ -3,14 +3,6 @@ import type { JobSource, JobStatus } from "../../../shared/types";
 export const DEFAULT_PIPELINE_SOURCES: JobSource[] = ["gradcracker", "indeed", "linkedin", "ukvisajobs"];
 export const PIPELINE_SOURCES_STORAGE_KEY = "jobops.pipeline.sources";
 
-export const sourceLabel: Record<JobSource, string> = {
-  gradcracker: "Gradcracker",
-  indeed: "Indeed",
-  linkedin: "LinkedIn",
-  ukvisajobs: "UK Visa Jobs",
-  manual: "Manual",
-};
-
 export const orderedSources: JobSource[] = ["gradcracker", "indeed", "linkedin", "ukvisajobs"];
 
 export const statusTokens: Record<JobStatus, { label: string; badge: string; dot: string }> = {

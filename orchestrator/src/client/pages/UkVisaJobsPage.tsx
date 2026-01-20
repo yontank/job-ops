@@ -37,12 +37,9 @@ import {
   SheetTitle,
   SheetTrigger,
 } from "@/components/ui/sheet";
-import { cn } from "@/lib/utils";
-import { formatDate, formatDateTime } from "../lib/dateUtils";
+import { cn, formatDate, formatDateTime, stripHtml } from "@/lib/utils";
 import * as api from "../api";
 import type { CreateJobInput } from "../../shared/types";
-
-const stripHtml = (value: string) => value.replace(/<[^>]*>/g, " ").replace(/\s+/g, " ").trim();
 
 const clampText = (value: string, max = 160) => (value.length > max ? `${value.slice(0, max).trim()}...` : value);
 

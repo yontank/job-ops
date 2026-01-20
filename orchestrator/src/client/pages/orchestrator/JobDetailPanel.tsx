@@ -29,18 +29,15 @@ import {
 } from "@/components/ui/dropdown-menu";
 import { Tabs, TabsContent, TabsList, TabsTrigger } from "@/components/ui/tabs";
 import { Textarea } from "@/components/ui/textarea";
-import { cn } from "@/lib/utils";
-import { copyTextToClipboard, formatJobForWebhook } from "@client/lib/jobCopy";
+import { cn, copyTextToClipboard, formatDate, formatJobForWebhook, sourceLabel, safeFilenamePart, stripHtml } from "@/lib/utils";
 
 import { DiscoveredPanel } from "../../components";
 import { ReadyPanel } from "../../components/ReadyPanel";
 import { TailoringEditor } from "../../components/TailoringEditor";
-import { formatDate } from "../../lib/dateUtils";
 import * as api from "../../api";
 import type { Job, JobStatus } from "../../../shared/types";
-import { defaultStatusToken, sourceLabel, statusTokens } from "./constants";
+import { defaultStatusToken, statusTokens } from "./constants";
 import type { FilterTab } from "./constants";
-import { safeFilenamePart, stripHtml } from "./utils";
 
 interface JobDetailPanelProps {
   activeTab: FilterTab;

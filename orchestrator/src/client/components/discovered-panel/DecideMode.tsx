@@ -6,10 +6,10 @@ import { Button } from "@/components/ui/button";
 import { Separator } from "@/components/ui/separator";
 
 import { FitAssessment } from "../FitAssessment";
-import { formatDate } from "../../lib/dateUtils";
+import { formatDate, sourceLabel } from "@/lib/utils";
 import type { Job } from "../../../shared/types";
 import { CollapsibleSection } from "./CollapsibleSection";
-import { getPlainDescription, sourceLabel } from "./helpers";
+import { getPlainDescription } from "./helpers";
 
 interface DecideModeProps {
   job: Job;

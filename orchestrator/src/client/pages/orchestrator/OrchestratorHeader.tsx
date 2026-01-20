@@ -31,8 +31,9 @@ import {
   SheetTrigger,
 } from "@/components/ui/sheet";
 
+import { sourceLabel } from "@/lib/utils";
 import type { JobSource } from "../../../shared/types";
-import { orderedSources, sourceLabel } from "./constants";
+import { orderedSources } from "./constants";
 
 interface OrchestratorHeaderProps {
   navOpen: boolean;

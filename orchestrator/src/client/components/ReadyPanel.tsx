@@ -39,8 +39,7 @@ import {
   AccordionItem,
   AccordionTrigger,
 } from "@/components/ui/accordion";
-import { cn } from "@/lib/utils";
-import { copyTextToClipboard, formatJobForWebhook } from "@client/lib/jobCopy";
+import { cn, copyTextToClipboard, formatJobForWebhook } from "@/lib/utils";
 import * as api from "../api";
 import { FitAssessment } from ".";
 import type { Job, ResumeProjectCatalogItem } from "../../shared/types";

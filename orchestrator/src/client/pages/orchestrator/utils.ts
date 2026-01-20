@@ -1,3 +1,4 @@
+import { safeFilenamePart, stripHtml } from "@/lib/utils";
 import type { Job } from "../../../shared/types";
 import type { FilterTab, JobSort } from "./constants";
 
@@ -70,10 +71,6 @@ export const jobMatchesQuery = (job: Job, query: string) => {
     .toLowerCase();
   return haystack.includes(normalized);
 };
-
-export const stripHtml = (value: string) => value.replace(/<[^>]*>/g, " ").replace(/\s+/g, " ").trim();
-
-export const safeFilenamePart = (value: string) => value.replace(/[^a-z0-9]/gi, "_");
 
 export const getJobCounts = (jobs: Job[]): Record<FilterTab, number> => {
   const byTab: Record<FilterTab, number> = {

@@ -6,7 +6,7 @@ import { Input } from "@/components/ui/input"
 import { Separator } from "@/components/ui/separator"
 import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from "@/components/ui/table"
 import type { ResumeProjectCatalogItem, ResumeProjectsSettings } from "@shared/types"
-import { clampInt } from "../utils"
+import { clampInt } from "@/lib/utils"
 
 type ResumeProjectsSectionProps = {
   resumeProjectsDraft: ResumeProjectsSettings | null

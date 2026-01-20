@@ -15,8 +15,9 @@ import {
 import { Input } from "@/components/ui/input";
 import { Tabs, TabsList, TabsTrigger } from "@/components/ui/tabs";
 
+import { sourceLabel } from "@/lib/utils";
 import type { JobSource } from "../../../shared/types";
-import { defaultSortDirection, sortLabels, sourceLabel, tabs } from "./constants";
+import { defaultSortDirection, sortLabels, tabs } from "./constants";
 import type { FilterTab, JobSort } from "./constants";
 
 interface OrchestratorFiltersProps {
