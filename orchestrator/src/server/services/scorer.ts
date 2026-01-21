@@ -4,13 +4,32 @@
 
 import type { Job } from '../../shared/types.js';
 import { getSetting } from '../repositories/settings.js';
-
-const OPENROUTER_API_URL = 'https://openrouter.ai/api/v1/chat/completions';
+import { callOpenRouter, type JsonSchemaDefinition } from './openrouter.js';
 
 interface SuitabilityResult {
   score: number;        // 0-100
   reason: string;       // Explanation
 }
+
+/** JSON schema for suitability scoring response */
+const SCORING_SCHEMA: JsonSchemaDefinition = {
+  name: 'job_suitability_score',
+  schema: {
+    type: 'object',
+    properties: {
+      score: {
+        type: 'integer',
+        description: 'Suitability score from 0 to 100',
+      },
+      reason: {
+        type: 'string',
+        description: 'Brief 1-2 sentence explanation of the score',
+      },
+    },
+    required: ['score', 'reason'],
+    additionalProperties: false,
+  },
+};
 
 /**
  * Score a job's suitability based on profile and job description.
@@ -20,8 +39,7 @@ export async function scoreJobSuitability(
   job: Job,
   profile: Record<string, unknown>
 ): Promise<SuitabilityResult> {
-  const apiKey = process.env.OPENROUTER_API_KEY;
-  if (!apiKey) {
+  if (!process.env.OPENROUTER_API_KEY) {
     console.warn('⚠️ OPENROUTER_API_KEY not set, using mock scoring');
     return mockScore(job);
   }
@@ -33,77 +51,38 @@ export async function scoreJobSuitability(
 
   const prompt = buildScoringPrompt(job, profile);
 
-  const MAX_RETRIES = 2;
-  let lastError: Error | null = null;
+  const result = await callOpenRouter<{ score: number; reason: string }>({
+    model,
+    messages: [{ role: 'user', content: prompt }],
+    jsonSchema: SCORING_SCHEMA,
+    maxRetries: 2,
+    jobId: job.id,
+  });
 
-  for (let attempt = 0; attempt <= MAX_RETRIES; attempt++) {
-    try {
-      if (attempt > 0) {
-        console.log(`🔄 [Job ${job.id}] Retry attempt ${attempt}/${MAX_RETRIES}...`);
-        // Small delay before retry
-        await new Promise(resolve => setTimeout(resolve, 500 * attempt));
-      }
-
-      const response = await fetch(OPENROUTER_API_URL, {
-        method: 'POST',
-        headers: {
-          'Authorization': `Bearer ${apiKey}`,
-          'Content-Type': 'application/json',
-          'HTTP-Referer': 'http://localhost',
-          'X-Title': 'JobOpsOrchestrator',
-        },
-        body: JSON.stringify({
-          model,
-          messages: [{ role: 'user', content: prompt }],
-          response_format: { type: 'json_object' },
-        }),
-      });
-
-      if (!response.ok) {
-        throw new Error(`OpenRouter error: ${response.status}`);
-      }
-
-      const data = await response.json();
-      const content = data.choices[0]?.message?.content;
-
-      if (!content) {
-        throw new Error('No content in response');
-      }
-
-      // Try to parse the response
-      const parsed = parseJsonFromContent(content, job.id);
-
-      // Validate we got a reasonable response
-      if (typeof parsed.score !== 'number' || isNaN(parsed.score)) {
-        throw new Error('Parsed response has no valid score');
-      }
-
-      return {
-        score: Math.min(100, Math.max(0, Math.round(parsed.score))),
-        reason: parsed.reason || 'No explanation provided',
-      };
-    } catch (error) {
-      lastError = error instanceof Error ? error : new Error(String(error));
-
-      // Only retry on parsing errors, not on network/API errors
-      if (lastError.message.includes('Unable to parse JSON') ||
-        lastError.message.includes('Parsed response has no valid score')) {
-        console.warn(`⚠️ [Job ${job.id}] Attempt ${attempt + 1} failed: ${lastError.message}`);
-        continue; // Try again
-      }
-
-      // For other errors, don't retry
-      break;
-    }
+  if (!result.success) {
+    console.error(`❌ [Job ${job.id}] Scoring failed: ${result.error}, using mock scoring`);
+    return mockScore(job);
   }
 
-  console.error(`❌ [Job ${job.id}] All ${MAX_RETRIES + 1} attempts failed, using mock scoring. Last error:`, lastError?.message);
-  return mockScore(job);
+  const { score, reason } = result.data;
+
+  // Validate we got a reasonable response
+  if (typeof score !== 'number' || isNaN(score)) {
+    console.error(`❌ [Job ${job.id}] Invalid score in response, using mock scoring`);
+    return mockScore(job);
+  }
+
+  return {
+    score: Math.min(100, Math.max(0, Math.round(score))),
+    reason: reason || 'No explanation provided',
+  };
 }
 
 /**
  * Robustly parse JSON from AI-generated content.
  * Handles common AI quirks: markdown fences, extra text, trailing commas, etc.
+ * 
+ * @deprecated Use callOpenRouter with structured outputs instead. Kept for backwards compatibility with tests.
  */
 export function parseJsonFromContent(content: string, jobId?: string): { score?: number; reason?: string } {
   const originalContent = content;
