@@ -97,6 +97,9 @@ Dev URLs:
 - **Pipeline config knobs**: `POST /api/pipeline/run` accepts `{ topN, minSuitabilityScore }`; `PIPELINE_TOP_N`/`PIPELINE_MIN_SCORE` are used by `npm run pipeline:run` (CLI runner).
 - **Anti-bot reality**: crawling is headless + "humanized", but sites can still block; expect occasional flakiness.
 
+Note on Analytics: The current alpha version includes anonymous analytics (Umami) to help me debug performance. This will be made opt-in only in the upcoming updates. If you want to disable it now, block umami.dakheera47.com in your firewall.
+
+
 ## License
 
 AGPLv3
