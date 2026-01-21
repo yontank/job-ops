@@ -243,17 +243,6 @@ export const JobDetailPanel: React.FC<JobDetailPanelProps> = ({
         job={selectedJob}
         onJobUpdated={onJobUpdated}
         onJobMoved={handleJobMoved}
-        onEditTailoring={() => {
-          onSetActiveTab("discovered");
-          setTimeout(() => setDetailTab("tailoring"), 50);
-        }}
-        onEditDescription={() => {
-          onSetActiveTab("discovered");
-          setTimeout(() => {
-            setDetailTab("description");
-            setIsEditingDescription(true);
-          }, 50);
-        }}
       />
     );
   }

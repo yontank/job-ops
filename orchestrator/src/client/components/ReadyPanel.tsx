@@ -3,6 +3,8 @@
  * 
  * Designed for a single, fast, repeatable workflow: verify → download → apply → mark applied.
  * The PDF is the primary artifact, represented abstractly through an Application Kit summary.
+ * 
+ * Now includes inline tailoring mode for editing and regenerating PDFs without switching tabs.
  */
 
 import React, { useCallback, useEffect, useMemo, useState } from "react";
@@ -42,14 +44,15 @@ import {
 import { cn, copyTextToClipboard, formatJobForWebhook } from "@/lib/utils";
 import * as api from "../api";
 import { FitAssessment, JobHeader, TailoredSummary } from ".";
+import { TailorMode } from "./discovered-panel/TailorMode";
 import type { Job, ResumeProjectCatalogItem } from "../../shared/types";
+
+type PanelMode = "ready" | "tailor";
 
 interface ReadyPanelProps {
   job: Job | null;
   onJobUpdated: () => void | Promise<void>;
   onJobMoved: (jobId: string) => void;
-  onEditTailoring: () => void;
-  onEditDescription: () => void;
 }
 
 const safeFilenamePart = (value: string | null | undefined) =>
@@ -59,9 +62,8 @@ export const ReadyPanel: React.FC<ReadyPanelProps> = ({
   job,
   onJobUpdated,
   onJobMoved,
-  onEditTailoring,
-  onEditDescription,
 }) => {
+  const [mode, setMode] = useState<PanelMode>("ready");
   const [isMarkingApplied, setIsMarkingApplied] = useState(false);
   const [isRegenerating, setIsRegenerating] = useState(false);
   const [catalog, setCatalog] = useState<ResumeProjectCatalogItem[]>([]);
@@ -76,6 +78,11 @@ export const ReadyPanel: React.FC<ReadyPanelProps> = ({
   useEffect(() => {
     api.getProfileProjects().then(setCatalog).catch(console.error);
   }, []);
+
+  // Reset mode when job changes
+  useEffect(() => {
+    setMode("ready");
+  }, [job?.id]);
 
   // Compute derived values
   const pdfHref = job
@@ -198,6 +205,23 @@ export const ReadyPanel: React.FC<ReadyPanelProps> = ({
     }
   }, [job]);
 
+  // Handler for regenerating PDF after tailoring edits
+  const handleTailorFinalize = useCallback(async () => {
+    if (!job) return;
+    try {
+      setIsRegenerating(true);
+      await api.generateJobPdf(job.id);
+      toast.success("PDF regenerated");
+      setMode("ready");
+      await onJobUpdated();
+    } catch (error) {
+      const message = error instanceof Error ? error.message : "Failed to regenerate PDF";
+      toast.error(message);
+    } finally {
+      setIsRegenerating(false);
+    }
+  }, [job, onJobUpdated]);
+
   // Empty state
   if (!job) {
     return (
@@ -210,6 +234,19 @@ export const ReadyPanel: React.FC<ReadyPanelProps> = ({
           Select a Ready job to view its application kit and take action.
         </p>
       </div>
+    );
+  }
+
+  // Tailor mode - reuse the same TailorMode component with 'ready' variant
+  if (mode === "tailor") {
+    return (
+      <TailorMode
+        job={job}
+        onBack={() => setMode("ready")}
+        onFinalize={handleTailorFinalize}
+        isFinalizing={isRegenerating}
+        variant="ready"
+      />
     );
   }
 
@@ -332,7 +369,7 @@ export const ReadyPanel: React.FC<ReadyPanelProps> = ({
           </DropdownMenuTrigger>
           <DropdownMenuContent align="center" className="w-56">
             {/* Fix/Edit actions */}
-            <DropdownMenuItem onSelect={onEditTailoring}>
+            <DropdownMenuItem onSelect={() => setMode("tailor")}>
               <Edit2 className="mr-2 h-4 w-4" />
               Edit tailoring
             </DropdownMenuItem>
@@ -343,11 +380,6 @@ export const ReadyPanel: React.FC<ReadyPanelProps> = ({
             >
               <RefreshCcw className={cn("mr-2 h-4 w-4", isRegenerating && "animate-spin")} />
               {isRegenerating ? "Regenerating..." : "Regenerate PDF"}
-            </DropdownMenuItem>
-
-            <DropdownMenuItem onSelect={onEditDescription}>
-              <Edit2 className="mr-2 h-4 w-4" />
-              Edit job description
             </DropdownMenuItem>
 
             <DropdownMenuSeparator />
