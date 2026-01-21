@@ -49,18 +49,18 @@ export async function generatePdf(
   selectedProjectIds?: string | null
 ): Promise<PdfResult> {
   console.log(`📄 Generating PDF for job ${jobId}...`);
-  
+
   const resumeJsonPath = baseResumePath || join(RESUME_GEN_DIR, 'base.json');
-  
+
   try {
     // Ensure output directory exists
     if (!existsSync(OUTPUT_DIR)) {
       await mkdir(OUTPUT_DIR, { recursive: true });
     }
-    
+
     // Read base resume
     const baseResume = JSON.parse(await readFile(resumeJsonPath, 'utf-8'));
-    
+
     // Inject tailored summary
     if (tailoredContent.summary) {
       if (baseResume.sections?.summary) {
@@ -81,10 +81,10 @@ export async function generatePdf(
 
     // Inject tailored skills
     if (tailoredContent.skills) {
-      const newSkills = Array.isArray(tailoredContent.skills) 
-        ? tailoredContent.skills 
-        : typeof tailoredContent.skills === 'string' 
-          ? JSON.parse(tailoredContent.skills) 
+      const newSkills = Array.isArray(tailoredContent.skills)
+        ? tailoredContent.skills
+        : typeof tailoredContent.skills === 'string'
+          ? JSON.parse(tailoredContent.skills)
           : null;
 
       if (newSkills && baseResume.sections?.skills) {
@@ -131,11 +131,11 @@ export async function generatePdf(
     } catch (err) {
       console.warn(`   ⚠️ Project visibility step failed for job ${jobId}:`, err);
     }
-    
+
     // Write modified resume to temp file
     const tempResumePath = join(RESUME_GEN_DIR, `temp_resume_${jobId}.json`);
     await writeFile(tempResumePath, JSON.stringify(baseResume, null, 2));
-    
+
     // Generate PDF using Python script - output directly to our data folder
     const outputFilename = `resume_${jobId}.pdf`;
     const outputPath = join(OUTPUT_DIR, outputFilename);
@@ -146,9 +146,9 @@ export async function generatePdf(
     } catch {
       // Ignore if it doesn't exist or cannot be removed.
     }
-    
+
     await runPythonPdfGenerator(tempResumePath, outputFilename, OUTPUT_DIR);
-    
+
     // Cleanup temp file
     try {
       const { unlink } = await import('fs/promises');
@@ -156,7 +156,7 @@ export async function generatePdf(
     } catch {
       // Ignore cleanup errors
     }
-    
+
     console.log(`✅ PDF generated: ${outputPath}`);
     return { success: true, pdfPath: outputPath };
   } catch (error) {
@@ -177,7 +177,7 @@ async function runPythonPdfGenerator(
   return new Promise((resolve, reject) => {
     // Use the virtual environment's Python (or system python in Docker)
     const pythonPath = process.env.PYTHON_PATH || join(RESUME_GEN_DIR, '.venv', 'bin', 'python');
-    
+
     const child = spawn(pythonPath, ['rxresume_automation.py'], {
       cwd: RESUME_GEN_DIR,
       env: {
@@ -188,7 +188,7 @@ async function runPythonPdfGenerator(
       },
       stdio: 'inherit',
     });
-    
+
     child.on('close', (code) => {
       if (code === 0) {
         resolve();
@@ -196,7 +196,7 @@ async function runPythonPdfGenerator(
         reject(new Error(`Python script exited with code ${code}`));
       }
     });
-    
+
     child.on('error', reject);
   });
 }
