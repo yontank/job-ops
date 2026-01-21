@@ -1,9 +1,10 @@
 import { useEffect, useState } from 'react';
 import * as api from '../api';
+import type { ResumeProfile } from '../../shared/types';
 
-let profileCache: any = null;
+let profileCache: ResumeProfile | null = null;
 let profileError: Error | null = null;
-let subscribers: Set<(profile: any | null, error: Error | null) => void> = new Set();
+let subscribers: Set<(profile: ResumeProfile | null, error: Error | null) => void> = new Set();
 let isFetching = false;
 
 /**
@@ -11,7 +12,7 @@ let isFetching = false;
  * Caches the result to avoid re-fetching.
  */
 export function useProfile() {
-    const [profile, setProfile] = useState<any | null>(profileCache);
+    const [profile, setProfile] = useState<ResumeProfile | null>(profileCache);
     const [error, setError] = useState<Error | null>(profileError);
 
     useEffect(() => {
@@ -22,7 +23,7 @@ export function useProfile() {
             setError(profileError);
         }
 
-        const handleUpdate = (newProfile: any | null, newError: Error | null) => {
+        const handleUpdate = (newProfile: ResumeProfile | null, newError: Error | null) => {
             setProfile(newProfile);
             setError(newError);
         };
