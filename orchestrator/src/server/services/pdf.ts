@@ -8,14 +8,37 @@ import { join, dirname } from 'path';
 import { fileURLToPath } from 'url';
 import { readFile, writeFile, mkdir, access, unlink } from 'fs/promises';
 import { existsSync } from 'fs';
+import crypto from 'node:crypto';
 
 import { getSetting } from '../repositories/settings.js';
 import { pickProjectIdsForJob } from './projectSelection.js';
 import { extractProjectsFromProfile, resolveResumeProjectsSettings } from './resumeProjects.js';
 import { getDataDir } from '../config/dataDir.js';
 import { getProfile } from './profile.js';
+import { validateAndRepairJson } from './openrouter.js';
+import { resumeDataSchema } from '../../shared/rxresume-schema.js';
 
 const __dirname = dirname(fileURLToPath(import.meta.url));
+
+/**
+ * Generate a CUID2-compatible ID for RXResume.
+ * CUID2 format: starts with a letter, lowercase alphanumeric, ~24 chars
+ */
+function generateCuid2(): string {
+  const alphabet = 'abcdefghijklmnopqrstuvwxyz0123456789';
+  const letters = 'abcdefghijklmnopqrstuvwxyz';
+  const bytes = crypto.randomBytes(24);
+
+  // First char must be a letter
+  let result = letters[bytes[0] % letters.length];
+
+  // Rest can be alphanumeric
+  for (let i = 1; i < 24; i++) {
+    result += alphabet[bytes[i] % alphabet.length];
+  }
+
+  return result;
+}
 
 // Paths - can be overridden via env for Docker
 const RESUME_GEN_DIR = process.env.RESUME_GEN_DIR || join(__dirname, '../../../../resume-generator');
@@ -67,9 +90,9 @@ export async function generatePdf(
     // Sanitize skills: Ensure all skills have required schema fields (visible, description, id, level, keywords)
     // This fixes issues where the base JSON uses a shorthand format (missing required fields)
     if (baseResume.sections?.skills?.items && Array.isArray(baseResume.sections.skills.items)) {
-      baseResume.sections.skills.items = baseResume.sections.skills.items.map((skill: any, index: number) => ({
+      baseResume.sections.skills.items = baseResume.sections.skills.items.map((skill: any) => ({
         ...skill,
-        id: skill.id || `skill-${index}`,
+        id: skill.id || generateCuid2(),
         visible: skill.visible ?? true,
         // Zod schema requires string, default to empty string if missing
         description: skill.description ?? '',
@@ -107,12 +130,12 @@ export async function generatePdf(
       if (newSkills && baseResume.sections?.skills) {
         // Ensure each skill item has required schema fields
         const existingSkills = baseResume.sections.skills.items || [];
-        const skillsWithSchema = newSkills.map((newSkill: any, index: number) => {
+        const skillsWithSchema = newSkills.map((newSkill: any) => {
           // Try to find matching existing skill to preserve id and other fields
           const existing = existingSkills.find((s: any) => s.name === newSkill.name);
 
           return {
-            id: newSkill.id || existing?.id || `skill-${index}`,
+            id: newSkill.id || existing?.id || generateCuid2(),
             visible: newSkill.visible !== undefined ? newSkill.visible : (existing?.visible ?? true),
             name: newSkill.name || existing?.name || '',
             description: newSkill.description !== undefined ? newSkill.description : (existing?.description || ''),
@@ -165,9 +188,22 @@ export async function generatePdf(
       console.warn(`   ⚠️ Project visibility step failed for job ${jobId}:`, err);
     }
 
+    // Validate and repair the resume JSON before PDF generation
+    const validationResult = await validateAndRepairJson(baseResume, resumeDataSchema, `pdf-${jobId}`);
+    if (!validationResult.success) {
+      console.error(`❌ [Job ${jobId}] Resume validation failed: ${validationResult.error}`);
+      return { success: false, error: `Resume validation failed: ${validationResult.error}` };
+    }
+
+    if (validationResult.repaired) {
+      console.log(`🔧 [Job ${jobId}] Resume JSON was repaired by AI`);
+    }
+
+    const validatedResume = validationResult.data;
+
     // Write modified resume to temp file
     const tempResumePath = join(RESUME_GEN_DIR, `temp_resume_${jobId}.json`);
-    await writeFile(tempResumePath, JSON.stringify(baseResume, null, 2));
+    await writeFile(tempResumePath, JSON.stringify(validatedResume, null, 2));
 
     // Generate PDF using Python script - output directly to our data folder
     const outputFilename = `resume_${jobId}.pdf`;
