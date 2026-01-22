@@ -1,6 +1,7 @@
 // combined types from: https://github.com/amruthpillai/reactive-resume/tree/v4.5.5/libs/schema/src
 
 import { z } from "zod";
+import { createId } from '@paralleldrive/cuid2';
 
 // --- Shared ---
 
@@ -10,6 +11,7 @@ export type FilterKeys<T, Condition> = {
 
 export const idSchema = z
     .string()
+    .length(24)
     .cuid2()
     .describe("Unique identifier for the item (CUID2 format)");
 

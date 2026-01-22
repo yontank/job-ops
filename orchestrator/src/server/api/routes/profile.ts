@@ -1,8 +1,9 @@
 import { Router, Request, Response } from 'express';
-import { access, mkdir, writeFile } from 'fs/promises';
+import { mkdir, stat, writeFile } from 'fs/promises';
 import { dirname } from 'path';
 import { extractProjectsFromProfile } from '../../services/resumeProjects.js';
 import { clearProfileCache, DEFAULT_PROFILE_PATH, getProfile } from '../../services/profile.js';
+import { resumeDataSchema } from '@shared/rxresume-schema.js';
 
 export const profileRouter = Router();
 
@@ -38,8 +39,9 @@ profileRouter.get('/', async (req: Request, res: Response) => {
  */
 profileRouter.get('/status', async (_req: Request, res: Response) => {
   try {
-    await access(DEFAULT_PROFILE_PATH);
-    res.json({ success: true, data: { exists: true, error: null } });
+    const fileInfo = await stat(DEFAULT_PROFILE_PATH);
+    const exists = fileInfo.isFile() && fileInfo.size > 0;
+    res.json({ success: true, data: { exists, error: exists ? null : 'Resume file is empty' } });
   } catch (error) {
     const message = error instanceof Error ? error.message : 'Unknown error';
     res.json({ success: true, data: { exists: false, error: message } });
@@ -57,13 +59,30 @@ profileRouter.post('/upload', async (req: Request, res: Response) => {
       throw new Error('Invalid profile payload. Expected a JSON object.');
     }
 
+    const parsed = resumeDataSchema.safeParse(profile);
+    if (!parsed.success) {
+      const details = parsed.error.issues[0]?.message ?? 'Resume JSON does not match the RxResume schema.';
+      throw new Error(`Invalid resume JSON: ${details}`);
+    }
+
+    const existing = await stat(DEFAULT_PROFILE_PATH).catch(() => null);
+    if (existing && existing.isDirectory()) {
+      throw new Error('Resume path is a directory. Remove it and upload again.');
+    }
+
     await mkdir(dirname(DEFAULT_PROFILE_PATH), { recursive: true });
-    await writeFile(DEFAULT_PROFILE_PATH, JSON.stringify(profile, null, 2), 'utf-8');
+    await writeFile(DEFAULT_PROFILE_PATH, JSON.stringify(parsed.data, null, 2), 'utf-8');
     clearProfileCache();
 
     res.json({ success: true, data: { exists: true, error: null } });
   } catch (error) {
-    const message = error instanceof Error ? error.message : 'Unknown error';
+    let message = error instanceof Error ? error.message : 'Unknown error';
+    if (error && typeof error === 'object' && 'code' in error) {
+      const code = (error as { code?: string }).code;
+      if (code === 'EROFS') {
+        message = 'Resume path is read-only. Remove the bind mount and restart the container.';
+      }
+    }
     res.status(400).json({ success: false, error: message });
   }
 });
