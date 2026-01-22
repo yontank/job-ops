@@ -363,7 +363,7 @@ export const SettingsPage: React.FC = () => {
 
       // Remove virtual field because the backend doesn't expect it
       // this exists only to toggle the UI
-      // need o track it so that the save button is enabled when it changes
+      // need to track it so that the save button is enabled when it changes
       delete payload.enableBasicAuth
 
       const updated = await api.updateSettings(payload)
