@@ -1,4 +1,4 @@
-import { useCallback, useEffect, useState } from "react";
+import { useCallback, useEffect, useMemo, useState } from "react";
 
 import type { JobSource } from "../../../shared/types";
 import {
@@ -7,19 +7,38 @@ import {
   orderedSources,
 } from "./constants";
 
-export const usePipelineSources = () => {
+const resolveAllowedSources = (enabledSources?: JobSource[]) =>
+  enabledSources && enabledSources.length > 0 ? enabledSources : DEFAULT_PIPELINE_SOURCES;
+
+const normalizeSources = (sources: JobSource[], allowedSources: JobSource[]) => {
+  const filtered = sources.filter((value) => allowedSources.includes(value));
+  return filtered.length > 0 ? filtered : allowedSources.slice(0, 1);
+};
+
+const sourcesMatch = (left: JobSource[], right: JobSource[]) =>
+  left.length === right.length && left.every((value, index) => value === right[index]);
+
+export const usePipelineSources = (enabledSources?: JobSource[]) => {
+  const allowedSources = useMemo(() => resolveAllowedSources(enabledSources), [enabledSources]);
   const [pipelineSources, setPipelineSources] = useState<JobSource[]>(() => {
     try {
       const raw = localStorage.getItem(PIPELINE_SOURCES_STORAGE_KEY);
-      if (!raw) return DEFAULT_PIPELINE_SOURCES;
+      if (!raw) return normalizeSources(allowedSources, allowedSources);
       const parsed = JSON.parse(raw) as unknown;
-      if (!Array.isArray(parsed)) return DEFAULT_PIPELINE_SOURCES;
+      if (!Array.isArray(parsed)) return normalizeSources(allowedSources, allowedSources);
       const next = parsed.filter((value): value is JobSource => orderedSources.includes(value as JobSource));
-      return next.length > 0 ? next : DEFAULT_PIPELINE_SOURCES;
+      return normalizeSources(next, allowedSources);
     } catch {
-      return DEFAULT_PIPELINE_SOURCES;
+      return normalizeSources(allowedSources, allowedSources);
     }
   });
+
+  useEffect(() => {
+    setPipelineSources((current) => {
+      const normalized = normalizeSources(current, allowedSources);
+      return sourcesMatch(current, normalized) ? current : normalized;
+    });
+  }, [allowedSources]);
 
   useEffect(() => {
     try {
@@ -30,6 +49,7 @@ export const usePipelineSources = () => {
   }, [pipelineSources]);
 
   const toggleSource = useCallback((source: JobSource, checked: boolean) => {
+    if (!allowedSources.includes(source)) return;
     setPipelineSources((current) => {
       const next = checked
         ? Array.from(new Set([...current, source]))
@@ -37,7 +57,7 @@ export const usePipelineSources = () => {
 
       return next.length === 0 ? current : next;
     });
-  }, []);
+  }, [allowedSources]);
 
   return { pipelineSources, setPipelineSources, toggleSource };
 };

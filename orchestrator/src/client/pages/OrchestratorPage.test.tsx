@@ -105,6 +105,16 @@ vi.mock("./orchestrator/usePipelineSources", () => ({
   }),
 }));
 
+vi.mock("../hooks/useSettings", () => ({
+  useSettings: () => ({
+    settings: {
+      jobspySites: ["indeed", "linkedin"],
+      ukvisajobsEmail: null,
+      ukvisajobsPasswordHint: null,
+    },
+  }),
+}));
+
 vi.mock("./orchestrator/OrchestratorHeader", () => ({
   OrchestratorHeader: () => <div data-testid="header" />,
 }));
@@ -118,12 +128,15 @@ vi.mock("./orchestrator/OrchestratorFilters", () => ({
     onTabChange,
     onSearchQueryChange,
     onSortChange,
+    sourcesWithJobs,
   }: {
     onTabChange: (t: FilterTab) => void;
     onSearchQueryChange: (q: string) => void;
     onSortChange: (s: any) => void;
+    sourcesWithJobs: string[];
   }) => (
     <div data-testid="filters">
+      <div data-testid="sources-with-jobs">{sourcesWithJobs.join(",")}</div>
       <button onClick={() => onTabChange("discovered")}>To Discovered</button>
       <button onClick={() => onSearchQueryChange("test search")}>Set Search</button>
       <button onClick={() => onSortChange({ key: "title", direction: "asc" })}>Set Sort</button>
@@ -273,5 +286,22 @@ describe("OrchestratorPage", () => {
     );
 
     expect(screen.getByTestId("detail-panel")).toBeInTheDocument();
+  });
+
+  it("clears source filter when no jobs exist for it", async () => {
+    window.matchMedia = createMatchMedia(true) as unknown as typeof window.matchMedia;
+
+    render(
+      <MemoryRouter initialEntries={["/ready?source=ukvisajobs"]}>
+        <LocationWatcher />
+        <Routes>
+          <Route path="/:tab" element={<OrchestratorPage />} />
+        </Routes>
+      </MemoryRouter>
+    );
+
+    await waitFor(() => {
+      expect(screen.getByTestId("location").textContent).not.toContain("source=ukvisajobs");
+    });
   });
 });

@@ -22,7 +22,8 @@ import { OrchestratorSummary } from "./orchestrator/OrchestratorSummary";
 import { useFilteredJobs } from "./orchestrator/useFilteredJobs";
 import { useOrchestratorData } from "./orchestrator/useOrchestratorData";
 import { usePipelineSources } from "./orchestrator/usePipelineSources";
-import { getJobCounts } from "./orchestrator/utils";
+import { useSettings } from "@client/hooks/useSettings";
+import { getEnabledSources, getJobCounts, getSourcesWithJobs } from "./orchestrator/utils";
 
 export const OrchestratorPage: React.FC = () => {
   const { tab, jobId } = useParams<{ tab: string; jobId?: string }>();
@@ -106,6 +107,7 @@ export const OrchestratorPage: React.FC = () => {
     }
   }, [tab, navigateWithContext]);
 
+
   const [navOpen, setNavOpen] = useState(false);
   const [isManualImportOpen, setIsManualImportOpen] = useState(false);
   const [isDetailDrawerOpen, setIsDetailDrawerOpen] = useState(false);
@@ -121,15 +123,25 @@ export const OrchestratorPage: React.FC = () => {
     navigateWithContext(activeTab, id);
   };
 
-  const { pipelineSources, setPipelineSources, toggleSource } = usePipelineSources();
+  const { settings } = useSettings();
   const { jobs, stats, isLoading, isPipelineRunning, setIsPipelineRunning, loadJobs } = useOrchestratorData();
+  const enabledSources = useMemo(() => getEnabledSources(settings ?? null), [settings]);
+  const { pipelineSources, setPipelineSources, toggleSource } = usePipelineSources(enabledSources);
 
   const activeJobs = useFilteredJobs(jobs, activeTab, sourceFilter, searchQuery, sort);
   const counts = useMemo(() => getJobCounts(jobs), [jobs]);
+  const sourcesWithJobs = useMemo(() => getSourcesWithJobs(jobs), [jobs]);
   const selectedJob = useMemo(
     () => (selectedJobId ? jobs.find((job) => job.id === selectedJobId) ?? null : null),
     [jobs, selectedJobId],
   );
+
+  useEffect(() => {
+    if (sourceFilter === "all") return;
+    if (!sourcesWithJobs.includes(sourceFilter)) {
+      setSourceFilter("all");
+    }
+  }, [sourceFilter, setSourceFilter, sourcesWithJobs]);
 
   const handleManualImported = useCallback(
     async (importedJobId: string) => {
@@ -225,16 +237,17 @@ export const OrchestratorPage: React.FC = () => {
 
   return (
     <>
-      <OrchestratorHeader
-        navOpen={navOpen}
-        onNavOpenChange={setNavOpen}
-        isPipelineRunning={isPipelineRunning}
-        pipelineSources={pipelineSources}
-        onToggleSource={toggleSource}
-        onSetPipelineSources={setPipelineSources}
-        onRunPipeline={handleRunPipeline}
-        onOpenManualImport={() => setIsManualImportOpen(true)}
-      />
+        <OrchestratorHeader
+          navOpen={navOpen}
+          onNavOpenChange={setNavOpen}
+          isPipelineRunning={isPipelineRunning}
+          pipelineSources={pipelineSources}
+          enabledSources={enabledSources}
+          onToggleSource={toggleSource}
+          onSetPipelineSources={setPipelineSources}
+          onRunPipeline={handleRunPipeline}
+          onOpenManualImport={() => setIsManualImportOpen(true)}
+        />
 
       <main className="container mx-auto max-w-7xl space-y-6 px-4 py-6 pb-12">
         <OrchestratorSummary stats={stats} isPipelineRunning={isPipelineRunning} />
@@ -249,6 +262,7 @@ export const OrchestratorPage: React.FC = () => {
             onSearchQueryChange={setSearchQuery}
             sourceFilter={sourceFilter}
             onSourceFilterChange={setSourceFilter}
+            sourcesWithJobs={sourcesWithJobs}
             sort={sort}
             onSortChange={setSort}
           />

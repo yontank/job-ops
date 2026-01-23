@@ -71,6 +71,7 @@ const renderFilters = (overrides?: Partial<ComponentProps<typeof OrchestratorFil
     onSearchQueryChange: vi.fn(),
     sourceFilter: "all" as const,
     onSourceFilterChange: vi.fn(),
+    sourcesWithJobs: ["gradcracker", "linkedin", "manual"],
     sort: { key: "score", direction: "desc" } as JobSort,
     onSortChange: vi.fn(),
     ...overrides,
@@ -103,5 +104,16 @@ describe("OrchestratorFilters", () => {
     fireEvent.pointerDown(screen.getByRole("button", { name: /score/i }));
     fireEvent.click(await screen.findByRole("menuitem", { name: /Direction:/i }));
     expect(props.onSortChange).toHaveBeenCalledWith({ key: "score", direction: "asc" });
+  });
+
+  it("only shows sources that exist in jobs", async () => {
+    renderFilters({ sourcesWithJobs: ["gradcracker", "manual"] });
+
+    fireEvent.pointerDown(screen.getByRole("button", { name: /all sources/i }));
+
+    expect(await screen.findByRole("menuitemradio", { name: /Gradcracker/i })).toBeInTheDocument();
+    expect(screen.queryByRole("menuitemradio", { name: /LinkedIn/i })).not.toBeInTheDocument();
+    expect(screen.queryByRole("menuitemradio", { name: /UK Visa Jobs/i })).not.toBeInTheDocument();
+    expect(screen.getByRole("menuitemradio", { name: /Manual/i })).toBeInTheDocument();
   });
 });

@@ -1,4 +1,5 @@
-import type { Job } from "../../../shared/types";
+import type { AppSettings, Job, JobSource } from "../../../shared/types";
+import { orderedSources } from "./constants";
 import type { FilterTab, JobSort } from "./constants";
 
 const dateValue = (value: string | null) => {
@@ -86,4 +87,40 @@ export const getJobCounts = (jobs: Job[]): Record<FilterTab, number> => {
   }
 
   return byTab;
+};
+
+const orderedSourceFilters: JobSource[] = [...orderedSources, "manual"];
+
+export const getSourcesWithJobs = (jobs: Job[]): JobSource[] => {
+  const seen = new Set<JobSource>();
+  for (const job of jobs) {
+    seen.add(job.source);
+  }
+  return orderedSourceFilters.filter((source) => seen.has(source));
+};
+
+export const getEnabledSources = (settings: AppSettings | null): JobSource[] => {
+  if (!settings) return [...orderedSources];
+
+  const enabled: JobSource[] = [];
+  const jobspySites = settings.jobspySites ?? [];
+  const hasUkVisaJobsAuth = Boolean(
+    settings.ukvisajobsEmail?.trim() && settings.ukvisajobsPasswordHint
+  );
+
+  for (const source of orderedSources) {
+    if (source === "gradcracker") {
+      enabled.push(source);
+      continue;
+    }
+    if (source === "ukvisajobs") {
+      if (hasUkVisaJobsAuth) enabled.push(source);
+      continue;
+    }
+    if (source === "indeed" || source === "linkedin") {
+      if (jobspySites.includes(source)) enabled.push(source);
+    }
+  }
+
+  return enabled.length > 0 ? enabled : [...orderedSources];
 };

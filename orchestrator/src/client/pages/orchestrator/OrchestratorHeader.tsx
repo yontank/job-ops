@@ -40,6 +40,7 @@ interface OrchestratorHeaderProps {
   onNavOpenChange: (open: boolean) => void;
   isPipelineRunning: boolean;
   pipelineSources: JobSource[];
+  enabledSources: JobSource[];
   onToggleSource: (source: JobSource, checked: boolean) => void;
   onSetPipelineSources: (sources: JobSource[]) => void;
   onRunPipeline: () => void;
@@ -58,6 +59,7 @@ export const OrchestratorHeader: React.FC<OrchestratorHeaderProps> = ({
   onNavOpenChange,
   isPipelineRunning,
   pipelineSources,
+  enabledSources,
   onToggleSource,
   onSetPipelineSources,
   onRunPipeline,
@@ -65,6 +67,8 @@ export const OrchestratorHeader: React.FC<OrchestratorHeaderProps> = ({
 }) => {
   const location = useLocation();
   const navigate = useNavigate();
+  const visibleSources = orderedSources.filter((source) => enabledSources.includes(source));
+  const enabledJobSpySources = visibleSources.filter((source) => source === "indeed" || source === "linkedin");
 
   return (
     <header className="sticky top-0 z-40 border-b bg-background/80 backdrop-blur supports-[backdrop-filter]:bg-background/60">
@@ -162,7 +166,7 @@ export const OrchestratorHeader: React.FC<OrchestratorHeaderProps> = ({
               <DropdownMenuContent align="end" className="w-56">
                 <DropdownMenuLabel>Sources</DropdownMenuLabel>
                 <DropdownMenuSeparator />
-                {orderedSources.map((source) => (
+                {visibleSources.map((source) => (
                   <DropdownMenuCheckboxItem
                     key={source}
                     checked={pipelineSources.includes(source)}
@@ -176,27 +180,31 @@ export const OrchestratorHeader: React.FC<OrchestratorHeaderProps> = ({
                 <DropdownMenuItem
                   onSelect={(event) => {
                     event.preventDefault();
-                    onSetPipelineSources(orderedSources);
+                    onSetPipelineSources(visibleSources);
                   }}
                 >
                   All sources
                 </DropdownMenuItem>
-                <DropdownMenuItem
-                  onSelect={(event) => {
-                    event.preventDefault();
-                    onSetPipelineSources(["gradcracker"]);
-                  }}
-                >
-                  Gradcracker only
-                </DropdownMenuItem>
-                <DropdownMenuItem
-                  onSelect={(event) => {
-                    event.preventDefault();
-                    onSetPipelineSources(["indeed", "linkedin"]);
-                  }}
-                >
-                  Indeed + LinkedIn only
-                </DropdownMenuItem>
+                {visibleSources.includes("gradcracker") && (
+                  <DropdownMenuItem
+                    onSelect={(event) => {
+                      event.preventDefault();
+                      onSetPipelineSources(["gradcracker"]);
+                    }}
+                  >
+                    Gradcracker only
+                  </DropdownMenuItem>
+                )}
+                {enabledJobSpySources.length > 0 && (
+                  <DropdownMenuItem
+                    onSelect={(event) => {
+                      event.preventDefault();
+                      onSetPipelineSources(enabledJobSpySources);
+                    }}
+                  >
+                    Indeed + LinkedIn only
+                  </DropdownMenuItem>
+                )}
               </DropdownMenuContent>
             </DropdownMenu>
           </div>
