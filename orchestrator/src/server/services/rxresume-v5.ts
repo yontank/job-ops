@@ -34,8 +34,6 @@ async function executeWithKeyRetries(url: string, options: RequestInit): Promise
         ? rawApiKey.split(',').map(k => k.trim())
         : [rawApiKey];
 
-    let lastError: Error | null = null;
-
     // Start from the last working key index
     for (let attempt = 0; attempt < apiKeys.length; attempt++) {
         const i = (lastWorkingKeyIndex + attempt) % apiKeys.length;
@@ -74,9 +72,7 @@ async function executeWithKeyRetries(url: string, options: RequestInit): Promise
             }
             return response.text();
         } catch (error) {
-            lastError = error as Error;
-
-            // If it was already handled by the 401 check above, it won't reach here 
+            // If it was already handled by the 401 check above, it won't reach here
             // because of the 'continue'. This catch is for network errors or unexpected throw.
             throw error;
         }
@@ -94,7 +90,7 @@ async function executeWithKeyRetries(url: string, options: RequestInit): Promise
 `);
     }
 
-    throw lastError || new Error('All Reactive Resume API keys failed.');
+    throw new Error('All Reactive Resume API keys failed.');
 }
 
 /**
