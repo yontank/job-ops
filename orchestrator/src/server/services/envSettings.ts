@@ -90,17 +90,42 @@ export function serializeEnvBoolean(value: boolean | null): string | null {
 }
 
 export async function applyStoredEnvOverrides(): Promise<void> {
-  const overrides = await settingsRepo.getAllSettings();
+  const safeGetSetting = async (key: SettingKey): Promise<string | null> => {
+    try {
+      return await settingsRepo.getSetting(key);
+    } catch (error) {
+      // In some test harnesses or first-boot scenarios, the DB may exist but not yet
+      // have the settings table. Treat this as "no overrides".
+      const msg = String((error as any)?.message ?? error);
+      if (msg.includes("no such table") && msg.includes("settings"))
+        return null;
+      throw error;
+    }
+  };
+
+  const safeSetSetting = async (key: SettingKey, value: string | null) => {
+    try {
+      await settingsRepo.setSetting(key, value);
+    } catch (error) {
+      const msg = String((error as any)?.message ?? error);
+      if (msg.includes("no such table") && msg.includes("settings")) return;
+      throw error;
+    }
+  };
 
   // Migration: move legacy OpenRouter key to the unified LLM key.
   //
   // Users only see their API keys once. If we simply switch to LLM_API_KEY without
   // copying, they may be unable to recover their existing key.
-  const effectiveProvider = (overrides.llmProvider ?? process.env.LLM_PROVIDER)
+  const providerOverride = await safeGetSetting("llmProvider");
+  const legacyOpenrouterKey = normalizeEnvInput(
+    await safeGetSetting("openrouterApiKey"),
+  );
+  const unifiedKey = normalizeEnvInput(await safeGetSetting("llmApiKey"));
+
+  const effectiveProvider = (providerOverride ?? process.env.LLM_PROVIDER)
     ?.trim()
     .toLowerCase();
-  const legacyOpenrouterKey = normalizeEnvInput(overrides.openrouterApiKey);
-  const unifiedKey = normalizeEnvInput(overrides.llmApiKey);
 
   if (
     (effectiveProvider ?? "openrouter") === "openrouter" &&
@@ -110,10 +135,8 @@ export async function applyStoredEnvOverrides(): Promise<void> {
     console.warn(
       "[DEPRECATED] Detected stored OpenRouter API key. Migrating to LLM_API_KEY and clearing legacy storage.",
     );
-    await settingsRepo.setSetting("llmApiKey", legacyOpenrouterKey);
-    await settingsRepo.setSetting("openrouterApiKey", null);
-    overrides.llmApiKey = legacyOpenrouterKey;
-    delete overrides.openrouterApiKey;
+    await safeSetSetting("llmApiKey", legacyOpenrouterKey);
+    await safeSetSetting("openrouterApiKey", null);
   }
 
   // Migration helper for env-based users: copy OPENROUTER_API_KEY -> LLM_API_KEY
@@ -133,20 +156,20 @@ export async function applyStoredEnvOverrides(): Promise<void> {
 
   await Promise.all([
     ...readableStringConfig.map(async ({ settingKey, envKey }) => {
-      const override = overrides[settingKey] ?? null;
+      const override = await safeGetSetting(settingKey);
       if (override === null) return;
       applyEnvValue(envKey, normalizeEnvInput(override));
     }),
     ...readableBooleanConfig.map(
       async ({ settingKey, envKey, defaultValue }) => {
-        const override = overrides[settingKey] ?? null;
+        const override = await safeGetSetting(settingKey);
         if (override === null) return;
         const parsed = parseEnvBoolean(override, defaultValue);
         applyEnvValue(envKey, serializeEnvBoolean(parsed));
       },
     ),
     ...privateStringConfig.map(async ({ settingKey, envKey }) => {
-      const override = overrides[settingKey] ?? null;
+      const override = await safeGetSetting(settingKey);
       if (override === null) return;
       applyEnvValue(envKey, normalizeEnvInput(override));
     }),
