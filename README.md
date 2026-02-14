@@ -7,6 +7,8 @@ Self-hosted. Docker-based. **Stop applying manually.**
 [![Stars](https://img.shields.io/github/stars/DaKheera47/job-ops?style=social)](https://github.com/DaKheera47/job-ops)
 [![GHCR](https://img.shields.io/badge/docker-ghcr.io-blue?logo=docker&logoColor=white)](https://github.com/DaKheera47/job-ops/pkgs/container/job-ops)
 [![License](https://img.shields.io/github/license/DaKheera47/job-ops)](LICENSE)
+[![Contributors](https://img.shields.io/github/contributors-anon/dakheera47/job-ops)](Contributors)
+
 
 ## 🎥 40s Demo: Crawl → Score → PDF → Track
 
