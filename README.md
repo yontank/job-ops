@@ -1,121 +1,111 @@
-# JobOps
+# JobOps ✨ AI Job Hunter & Resume Tailor
 
-AI-powered job discovery and application pipeline. Automatically finds jobs, scores them against your profile, and generates tailored resumes.
+**Automate the hunt.** Scrapes major job boards (LinkedIn, Indeed, Glassdoor), **AI-scores suitability**, **tailors resumes** (RxResume), and **tracks application emails** automatically.
+
+Self-hosted. Docker-based. **Stop applying manually.**
+
+[![Stars](https://img.shields.io/github/stars/DaKheera47/job-ops?style=social)](https://github.com/DaKheera47/job-ops)
+[![GHCR](https://img.shields.io/badge/docker-ghcr.io-blue?logo=docker&logoColor=white)](https://github.com/DaKheera47/job-ops/pkgs/container/job-ops)
+[![License](https://img.shields.io/github/license/DaKheera47/job-ops)](LICENSE)
+
+## 🎥 40s Demo: Crawl → Score → PDF → Track
+
+<details>
+<summary>
+Pipeline Demo
+</summary>
+  
+  https://github.com/user-attachments/assets/5b9157a9-13b0-4ec6-9bd2-a39dbc2b11c5
+</details>
+
+
+<details>
+<summary>
+Apply & Track
+</summary>
+  
+  https://github.com/user-attachments/assets/06e5e782-47f5-42d0-8b28-b89102d7ea1b
+</details>
+
+## 🚀 Quick Start (10 Min)
+```bash
+# 1. Download
+curl -o docker-compose.yml https://raw.githubusercontent.com/DaKheera47/job-ops/main/docker-compose.yml
+
+# 2. Start (Pulls pre-built image)
+docker compose up -d
+
+# 3. Launch Dashboard
+# Open http://localhost:3005 to start the onboarding wizard
+
+```
+
+## Why JobOps?
+
+* **Universal Scraping**: Supports **LinkedIn, Indeed, Glassdoor** + specialized boards (Gradcracker, UK Visa Jobs).
+* **AI Scoring**: Ranks jobs by fit against *your* profile using your preferred LLM (OpenRouter/OpenAI/Gemini).
+* **Auto-Tailoring**: Generates custom resumes (PDFs) for every application using RxResume v4.
+* **Email Tracking**: Connect Gmail to auto-detect interviews, offers, and rejections.
+* **Self-Hosted**: Your data stays with you. SQLite database. No SaaS fees.
 
 ## Workflow
 
-1. **Search**: Scrapes Gradcracker, Indeed, LinkedIn, Glassdoor, and UK Visa Sponsorship jobs.
-2. **Score**: AI ranks jobs by suitability using the configured LLM provider (OpenRouter by default).
-3. **Tailor**: Generates a custom resume summary for top-tier matches.
+1. **Search**: Scrapes job boards for roles matching your criteria.
+2. **Score**: AI ranks jobs (0-100) based on your resume/profile.
+3. **Tailor**: Generates a custom resume summary & keyword optimization for top matches.
 4. **Export**: Uses [RxResume v4](https://v4.rxresu.me) to create tailored PDFs.
-5. **Manage**: Review and mark jobs as "Applied" via the dashboard (calls webhooks for lifecycle events).
-6. **Track**: Connect your Gmail to automatically track post-application emails (interviews, offers, rejections) via the **Tracking Inbox**. The Smart Router AI matches emails to your applied jobs and updates job application status automatically.
+5. **Track**: "Smart Router" AI watches your inbox for recruiter replies.
 
-## Example of generating a tailored resume for a job
+## Supported Extractors
 
-https://github.com/user-attachments/assets/5b9157a9-13b0-4ec6-9bd2-a39dbc2b11c5
+| Platform | Focus |
+| --- | --- |
+| **LinkedIn** | Global / General |
+| **Indeed** | Global / General |
+| **Glassdoor** | Global / General |
+| **Gradcracker** | STEM / Grads (UK) |
+| **UK Visa Jobs** | Sponsorship (UK) |
 
-## Example of applying to a Ready job
+*(More extractors can be added via TypeScript - see `documentation/extractors`)*
 
-https://github.com/user-attachments/assets/06e5e782-47f5-42d0-8b28-b89102d7ea1b
+## Post-App Tracking (Killer Feature)
 
-## How to Start
+Connect Gmail → AI routes emails to your applied jobs.
 
-### Prerequisites
+* "We'd like to interview you..." → **Status: Interviewing** (Auto-updated)
+* "Unfortunately..." → **Status: Rejected** (Auto-updated)
 
-- Docker Desktop (or Docker Engine + Docker Compose)
+See `documentation/post-application-tracking.md` for setup.
 
-### Overview
+## Accounts & Setup
 
-- Run the app with Docker (this pulls the pre-built image).
-- Create accounts:
-  - OpenRouter (LLM scoring/tailoring)
-  - RxResume v4 (PDF export + editable resume data)
+| Service | Role | Cost |
+| --- | --- | --- |
+| **OpenRouter** | AI Intelligence | Pay-as-you-go |
+| **RxResume v4** | PDF Generation | Free |
+| **Gmail** | Email Tracking | Free (Optional) |
 
-- Open the dashboard and complete the onboarding wizard:
-  - Add API keys/credentials
-  - Choose a resume template from RxResume
-  - Run the pipeline to fetch jobs → score → tailor → export PDFs
+The onboarding wizard at `localhost:3005` will guide you through connecting these services.
 
-- Review jobs in the dashboard and mark stages
-- (Optional) Connect Gmail to enable automatic post-application email tracking
+## Documentation
 
-### Post-Application Tracking (Optional)
+* [Extractors Guide](https://www.google.com/search?q=documentation/extractors/README.md) - How to configure crawl targets.
+* [Orchestrator](https://www.google.com/search?q=documentation/orchestrator.md) - How the pipeline works.
+* [Self-Hosting](https://www.google.com/search?q=documentation/self-hosting.md) - Advanced Docker & Gmail setup.
+* [Tracking](https://www.google.com/search?q=documentation/post-application-tracking.md) - Email integration details.
 
-Once you've applied to jobs, connect your Gmail account to automatically track responses:
-
-1. Go to **Tracking Inbox** in the dashboard
-2. Click **Connect Gmail** and authorize access
-3. The Smart Router AI will analyze incoming emails and match them to your applied jobs
-4. High-confidence matches (95%+) are auto-linked; others appear in your Inbox for review
-5. Interview invites, offers, and rejections automatically update your job timeline
-
-See `documentation/self-hosting.md` for Gmail OAuth setup instructions.
-
-### Quick Start (commands)
-
-```bash
-# 1. Clone and move to directory
-git clone https://github.com/DaKheera47/job-ops.git
-cd job-ops
-
-# 2. Start with Docker (pulls pre-built image from GHCR)
-docker compose up -d
-
-# 3. Open the dashboard in your browser, the app will onboard your credentials
-# http://localhost:3005
-```
-
-### Required accounts
-
-- OpenRouter (LLM provider)
-  - Create an account and generate an API key.
-
-- RxResume v4
-  - Create an account on v4.rxresu.me
-  - The summary, title, chosen projects, and keywords in the Resume will be tailored for the job description
-  - Recreate/import your resume there so JobOps can:
-    - pick a template
-    - generate tailored PDFs from your stored resume data
-
-### App Onboarding
-
-The app will guide you through setup on first launch. The onboarding wizard helps you:
-
-- Configure the LLM provider (OpenRouter by default) and add an API key if required (for AI scoring/tailoring)
-- Add your RxResume credentials (for PDF export via v4.rxresu.me)
-- Select a template resume from your v4.rxresu.me account
-
-## Technical Details
-
-- Technical breakdowns here: `documentation/extractors/README.md`
-- Orchestrator docs here: `documentation/orchestrator.md`
-- Post-application tracking: `documentation/post-application-tracking.md`
-- Full documentation index: `documentation/README.md`
-- Persistent data lives in `./data` (bind-mounted into the container).
-
-## Notes / sharp edges
-
-- **Crawl targets**: edit `extractors/gradcracker/src/main.ts` to change the Gradcracker location/role matrix.
-- **Pipeline config knobs**: `POST /api/pipeline/run` accepts `{ topN, minSuitabilityScore }`; `PIPELINE_TOP_N`/`PIPELINE_MIN_SCORE` are used by `npm run pipeline:run` (CLI runner).
-- **Anti-bot reality**: crawling is headless + "humanized", but sites can still block; expect occasional flakiness.
-
-Note on Analytics: The current alpha version includes anonymous analytics (Umami) to help me debug performance. This will be made opt-in only in the upcoming updates. If you want to disable it now, block umami.dakheera47.com in your firewall.
-
-# Contact
-
-If you need any help with any step of the process, feel free to open an [issue](https://github.com/DaKheera47/job-ops/issues). I am actively monitoring this section and I would be extremely happy to help you get up and running!
+**Note on Analytics**: The alpha version includes anonymous analytics (Umami) to help debug performance. To opt-out, block `umami.dakheera47.com` in your firewall/DNS.
 
 ## Star History
 
 <a href="https://www.star-history.com/#DaKheera47/job-ops&type=date&legend=top-left">
- <picture>
-   <source media="(prefers-color-scheme: dark)" srcset="https://api.star-history.com/svg?repos=DaKheera47/job-ops&type=date&theme=dark&legend=top-left" />
-   <source media="(prefers-color-scheme: light)" srcset="https://api.star-history.com/svg?repos=DaKheera47/job-ops&type=date&legend=top-left" />
-   <img alt="Star History Chart" src="https://api.star-history.com/svg?repos=DaKheera47/job-ops&type=date&legend=top-left" />
- </picture>
+<picture>
+<source media="(prefers-color-scheme: dark)" srcset="https://api.star-history.com/svg?repos=DaKheera47/job-ops&type=date&theme=dark&legend=top-left" />
+<source media="(prefers-color-scheme: light)" srcset="https://api.star-history.com/svg?repos=DaKheera47/job-ops&type=date&legend=top-left" />
+<img alt="Star History Chart" src="https://api.star-history.com/svg?repos=DaKheera47/job-ops&type=date&legend=top-left" />
+</picture>
 </a>
 
 ## License
 
-AGPLv3
+**AGPLv3** - Free to use and modify.
