@@ -11,6 +11,7 @@ import type {
   BackupInfo,
   BulkJobActionRequest,
   BulkJobActionResponse,
+  BulkJobActionStreamEvent,
   BulkPostApplicationAction,
   BulkPostApplicationActionResponse,
   DemoInfoResponse,
@@ -78,6 +79,11 @@ type LegacyApiResponse<T> =
       message?: string;
       details?: unknown;
     };
+
+type StreamSseInput =
+  | BulkJobActionRequest
+  | { content: string; stream: true }
+  | { stream: true };
 
 export type BasicAuthCredentials = {
   username: string;
@@ -393,11 +399,11 @@ export async function updateJob(
   });
 }
 
-async function streamSseEvents(
+async function streamSseEvents<TEvent>(
   endpoint: string,
-  input: Record<string, unknown>,
+  input: StreamSseInput,
   handlers: {
-    onEvent: (event: JobChatStreamEvent) => void;
+    onEvent: (event: TEvent) => void;
     signal?: AbortSignal;
   },
 ): Promise<void> {
@@ -439,29 +445,40 @@ async function streamSseEvents(
   const reader = response.body.getReader();
   let buffer = "";
 
-  while (true) {
-    const { done, value } = await reader.read();
-    if (done) break;
-    buffer += decoder.decode(value, { stream: true });
+  try {
+    while (true) {
+      const { done, value } = await reader.read();
+      if (done) break;
+      buffer += decoder.decode(value, { stream: true });
 
-    let separatorIndex = buffer.indexOf("\n\n");
-    while (separatorIndex !== -1) {
-      const frame = buffer.slice(0, separatorIndex);
-      buffer = buffer.slice(separatorIndex + 2);
-      const dataLines = frame
-        .split("\n")
-        .filter((line) => line.startsWith("data:"))
-        .map((line) => line.slice(5).trim())
-        .filter(Boolean);
+      let separatorIndex = buffer.indexOf("\n\n");
+      while (separatorIndex !== -1) {
+        const frame = buffer.slice(0, separatorIndex);
+        buffer = buffer.slice(separatorIndex + 2);
+        const dataLines = frame
+          .split("\n")
+          .filter((line) => line.startsWith("data:"))
+          .map((line) => line.slice(5).trim())
+          .filter(Boolean);
 
-      for (const line of dataLines) {
-        try {
-          handlers.onEvent(JSON.parse(line) as JobChatStreamEvent);
-        } catch {
-          // Ignore malformed events to keep stream resilient
+        for (const line of dataLines) {
+          let parsedEvent: TEvent;
+          try {
+            parsedEvent = JSON.parse(line) as TEvent;
+          } catch {
+            // Ignore malformed events to keep stream resilient
+            continue;
+          }
+          handlers.onEvent(parsedEvent);
         }
+        separatorIndex = buffer.indexOf("\n\n");
       }
-      separatorIndex = buffer.indexOf("\n\n");
+    }
+  } finally {
+    try {
+      await reader.cancel();
+    } catch {
+      // Ignore cancellation errors when stream is already closed
     }
   }
 }
@@ -708,6 +725,20 @@ export async function bulkJobAction(
     method: "POST",
     body: JSON.stringify(input),
   });
+}
+
+export async function streamBulkJobAction(
+  input: BulkJobActionRequest,
+  handlers: {
+    onEvent: (event: BulkJobActionStreamEvent) => void;
+    signal?: AbortSignal;
+  },
+): Promise<void> {
+  return streamSseEvents<BulkJobActionStreamEvent>(
+    "/jobs/bulk-actions/stream",
+    input,
+    handlers,
+  );
 }
 
 export async function getJobStageEvents(id: string): Promise<StageEvent[]> {
