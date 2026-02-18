@@ -221,7 +221,7 @@ export async function generatePdf(
     try {
       let selectedSet: Set<string>;
 
-      if (selectedProjectIds) {
+      if (selectedProjectIds !== null && selectedProjectIds !== undefined) {
         selectedSet = new Set(
           selectedProjectIds
             .split(",")
@@ -266,7 +266,7 @@ export async function generatePdf(
           if (!id) continue;
           typedItem.visible = selectedSet.has(id);
         }
-        projectsSection.visible = selectedSet.size > 0;
+        projectsSection.visible = true;
       }
     } catch (err) {
       console.warn(

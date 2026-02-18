@@ -88,6 +88,41 @@ describe("TailorMode", () => {
     );
   });
 
+  it("allows finalize when summary exists even if no project is selected", async () => {
+    render(
+      <TailorMode
+        job={createJob({ selectedProjectIds: "" })}
+        onBack={vi.fn()}
+        onFinalize={vi.fn()}
+        isFinalizing={false}
+      />,
+    );
+
+    expect(
+      await screen.findByRole("button", { name: "Finalize & Move to Ready" }),
+    ).toBeEnabled();
+  });
+
+  it("hides selected projects section when catalog is empty after load", async () => {
+    render(
+      <TailorMode
+        job={createJob()}
+        onBack={vi.fn()}
+        onFinalize={vi.fn()}
+        isFinalizing={false}
+      />,
+    );
+
+    await waitFor(() =>
+      expect(api.getResumeProjectsCatalog).toHaveBeenCalled(),
+    );
+    await waitFor(() =>
+      expect(
+        screen.queryByRole("button", { name: "Selected Projects" }),
+      ).not.toBeInTheDocument(),
+    );
+  });
+
   it("resets local state when job id changes", async () => {
     const { rerender } = render(
       <TailorMode
