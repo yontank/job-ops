@@ -5,6 +5,7 @@ import {
   isSourceAllowedForCountry,
   normalizeCountryKey,
 } from "@shared/location-support.js";
+import { parseSearchCitiesSetting } from "@shared/search-cities.js";
 import type { CreateJobInput, PipelineConfig } from "@shared/types";
 import * as jobsRepo from "../../repositories/jobs";
 import * as settingsRepo from "../../repositories/settings";
@@ -59,7 +60,10 @@ export async function discoverJobsStep(args: {
   }
 
   const selectedCountry = normalizeCountryKey(
-    settings.jobspyCountryIndeed ?? settings.jobspyLocation ?? "united kingdom",
+    settings.jobspyCountryIndeed ??
+      settings.searchCities ??
+      settings.jobspyLocation ??
+      "united kingdom",
   );
   const compatibleSources = args.mergedConfig.sources.filter((source) =>
     isSourceAllowedForCountry(source, selectedCountry),
@@ -100,7 +104,8 @@ export async function discoverJobsStep(args: {
         const jobSpyResult = await runJobSpy({
           sites: jobSpySites,
           searchTerms,
-          location: settings.jobspyLocation ?? undefined,
+          location:
+            settings.searchCities ?? settings.jobspyLocation ?? undefined,
           resultsWanted: settings.jobspyResultsWanted
             ? parseInt(settings.jobspyResultsWanted, 10)
             : undefined,
@@ -172,6 +177,10 @@ export async function discoverJobsStep(args: {
 
         const adzunaResult = await runAdzuna({
           country: adzunaCountryCode,
+          countryKey: selectedCountry,
+          locations: parseSearchCitiesSetting(
+            settings.searchCities ?? settings.jobspyLocation,
+          ),
           searchTerms,
           maxJobsPerTerm: adzunaMaxJobsPerTerm,
           onProgress: (event) => {
@@ -249,6 +258,10 @@ export async function discoverJobsStep(args: {
 
         const hiringCafeResult = await runHiringCafe({
           country: selectedCountry,
+          countryKey: selectedCountry,
+          locations: parseSearchCitiesSetting(
+            settings.searchCities ?? settings.jobspyLocation,
+          ),
           searchTerms,
           maxJobsPerTerm: hiringCafeMaxJobsPerTerm,
           onProgress: (event) => {

@@ -9,6 +9,11 @@ import { mkdir, readFile, unlink } from "node:fs/promises";
 import { dirname, join } from "node:path";
 import { createInterface } from "node:readline";
 import { fileURLToPath } from "node:url";
+import {
+  matchesRequestedCity,
+  parseSearchCitiesSetting,
+  shouldApplyStrictCityFilter,
+} from "@shared/search-cities.js";
 import type { CreateJobInput, JobSource } from "@shared/types";
 import { toNumberOrNull, toStringOrNull } from "@shared/utils/type-conversion";
 import { getDataDir } from "../config/dataDir";
@@ -144,6 +149,7 @@ export interface RunJobSpyOptions {
   sites?: Array<JobSource>;
   searchTerms?: string[];
   location?: string;
+  locations?: string[];
   resultsWanted?: number;
   hoursOld?: number;
   countryIndeed?: string;
@@ -158,6 +164,20 @@ export interface JobSpyResult {
   error?: string;
 }
 
+export function shouldApplyStrictLocationFilter(
+  location: string,
+  countryIndeed: string,
+): boolean {
+  return shouldApplyStrictCityFilter(location, countryIndeed);
+}
+
+export function matchesRequestedLocation(
+  jobLocation: string | undefined,
+  requestedLocation: string,
+): boolean {
+  return matchesRequestedCity(jobLocation, requestedLocation);
+}
+
 export async function runJobSpy(
   options: RunJobSpyOptions = {},
 ): Promise<JobSpyResult> {
@@ -170,6 +190,9 @@ export async function runJobSpy(
     .join(",");
 
   const searchTerms = resolveSearchTerms(options);
+  const locations = resolveLocations(options);
+  const countryIndeed =
+    options.countryIndeed ?? process.env.JOBSPY_COUNTRY_INDEED ?? "UK";
   if (searchTerms.length === 0) {
     return { success: true, jobs: [] };
   }
@@ -178,93 +201,105 @@ export async function runJobSpy(
     const jobs: CreateJobInput[] = [];
     const seenJobUrls = new Set<string>();
 
-    for (let i = 0; i < searchTerms.length; i++) {
-      const searchTerm = searchTerms[i];
-      const suffix = `${i + 1}_${slugForFilename(searchTerm)}`;
-      const outputCsv = join(outputDir, `jobspy_jobs_${suffix}.csv`);
-      const outputJson = join(outputDir, `jobspy_jobs_${suffix}.json`);
+    const totalRuns = searchTerms.length * locations.length;
+    let runIndex = 0;
 
-      await new Promise<void>((resolve, reject) => {
-        const pythonPath = getPythonPath();
-        const child = spawn(pythonPath, [JOBSPY_SCRIPT], {
-          cwd: JOBSPY_DIR,
-          shell: false,
-          stdio: ["ignore", "pipe", "pipe"],
-          env: {
-            ...process.env,
-            JOBSPY_SITES: sites || "indeed,linkedin,glassdoor",
-            JOBSPY_SEARCH_TERM: searchTerm,
-            JOBSPY_TERM_INDEX: String(i + 1),
-            JOBSPY_TERM_TOTAL: String(searchTerms.length),
-            JOBSPY_LOCATION:
-              options.location ?? process.env.JOBSPY_LOCATION ?? "UK",
-            JOBSPY_RESULTS_WANTED: String(
-              options.resultsWanted ?? process.env.JOBSPY_RESULTS_WANTED ?? 200,
-            ),
-            JOBSPY_HOURS_OLD: String(
-              options.hoursOld ?? process.env.JOBSPY_HOURS_OLD ?? 72,
-            ),
-            JOBSPY_COUNTRY_INDEED:
-              options.countryIndeed ??
-              process.env.JOBSPY_COUNTRY_INDEED ??
-              "UK",
-            JOBSPY_LINKEDIN_FETCH_DESCRIPTION: String(
-              options.linkedinFetchDescription ??
-                process.env.JOBSPY_LINKEDIN_FETCH_DESCRIPTION ??
-                "1",
-            ),
-            JOBSPY_IS_REMOTE: String(
-              options.isRemote ?? process.env.JOBSPY_IS_REMOTE ?? "0",
-            ),
-            JOBSPY_OUTPUT_CSV: outputCsv,
-            JOBSPY_OUTPUT_JSON: outputJson,
-          },
+    for (const searchTerm of searchTerms) {
+      for (const location of locations) {
+        runIndex += 1;
+        const suffix = `${runIndex}_${slugForFilename(searchTerm)}_${slugForFilename(location)}`;
+        const outputCsv = join(outputDir, `jobspy_jobs_${suffix}.csv`);
+        const outputJson = join(outputDir, `jobspy_jobs_${suffix}.json`);
+
+        await new Promise<void>((resolve, reject) => {
+          const pythonPath = getPythonPath();
+          const child = spawn(pythonPath, [JOBSPY_SCRIPT], {
+            cwd: JOBSPY_DIR,
+            shell: false,
+            stdio: ["ignore", "pipe", "pipe"],
+            env: {
+              ...process.env,
+              JOBSPY_SITES: sites || "indeed,linkedin,glassdoor",
+              JOBSPY_SEARCH_TERM: searchTerm,
+              JOBSPY_TERM_INDEX: String(runIndex),
+              JOBSPY_TERM_TOTAL: String(totalRuns),
+              JOBSPY_LOCATION: location,
+              JOBSPY_RESULTS_WANTED: String(
+                options.resultsWanted ??
+                  process.env.JOBSPY_RESULTS_WANTED ??
+                  200,
+              ),
+              JOBSPY_HOURS_OLD: String(
+                options.hoursOld ?? process.env.JOBSPY_HOURS_OLD ?? 72,
+              ),
+              JOBSPY_COUNTRY_INDEED: countryIndeed,
+              JOBSPY_LINKEDIN_FETCH_DESCRIPTION: String(
+                options.linkedinFetchDescription ??
+                  process.env.JOBSPY_LINKEDIN_FETCH_DESCRIPTION ??
+                  "1",
+              ),
+              JOBSPY_IS_REMOTE: String(
+                options.isRemote ?? process.env.JOBSPY_IS_REMOTE ?? "0",
+              ),
+              JOBSPY_OUTPUT_CSV: outputCsv,
+              JOBSPY_OUTPUT_JSON: outputJson,
+            },
+          });
+
+          const handleLine = (line: string, stream: NodeJS.WriteStream) => {
+            const event = parseJobSpyProgressLine(line);
+            if (event) {
+              options.onProgress?.(event);
+              return;
+            }
+            stream.write(`${line}\n`);
+          };
+
+          const stdoutRl = child.stdout
+            ? createInterface({ input: child.stdout })
+            : null;
+          const stderrRl = child.stderr
+            ? createInterface({ input: child.stderr })
+            : null;
+
+          stdoutRl?.on("line", (line) => handleLine(line, process.stdout));
+          stderrRl?.on("line", (line) => handleLine(line, process.stderr));
+
+          child.on("close", (code) => {
+            stdoutRl?.close();
+            stderrRl?.close();
+            if (code === 0) resolve();
+            else reject(new Error(`JobSpy exited with code ${code}`));
+          });
+          child.on("error", reject);
         });
 
-        const handleLine = (line: string, stream: NodeJS.WriteStream) => {
-          const event = parseJobSpyProgressLine(line);
-          if (event) {
-            options.onProgress?.(event);
-            return;
-          }
-          stream.write(`${line}\n`);
-        };
+        const raw = await readFile(outputJson, "utf-8");
+        const parsed = JSON.parse(raw) as Array<Record<string, unknown>>;
+        const mapped = mapJobSpyRows(parsed);
+        const strictLocationFilter = shouldApplyStrictLocationFilter(
+          location,
+          countryIndeed,
+        );
+        const filtered = strictLocationFilter
+          ? mapped.filter((job) =>
+              matchesRequestedLocation(job.location, location),
+            )
+          : mapped;
 
-        const stdoutRl = child.stdout
-          ? createInterface({ input: child.stdout })
-          : null;
-        const stderrRl = child.stderr
-          ? createInterface({ input: child.stderr })
-          : null;
+        for (const job of filtered) {
+          const url = job.jobUrl;
+          if (seenJobUrls.has(url)) continue;
+          seenJobUrls.add(url);
+          jobs.push(job);
+        }
 
-        stdoutRl?.on("line", (line) => handleLine(line, process.stdout));
-        stderrRl?.on("line", (line) => handleLine(line, process.stderr));
-
-        child.on("close", (code) => {
-          stdoutRl?.close();
-          stderrRl?.close();
-          if (code === 0) resolve();
-          else reject(new Error(`JobSpy exited with code ${code}`));
-        });
-        child.on("error", reject);
-      });
-
-      const raw = await readFile(outputJson, "utf-8");
-      const parsed = JSON.parse(raw) as Array<Record<string, unknown>>;
-      const mapped = mapJobSpyRows(parsed);
-
-      for (const job of mapped) {
-        const url = job.jobUrl;
-        if (seenJobUrls.has(url)) continue;
-        seenJobUrls.add(url);
-        jobs.push(job);
-      }
-
-      try {
-        await unlink(outputJson);
-        await unlink(outputCsv);
-      } catch {
-        // Ignore cleanup errors
+        try {
+          await unlink(outputJson);
+          await unlink(outputCsv);
+        } catch {
+          // Ignore cleanup errors
+        }
       }
     }
 
@@ -273,6 +308,16 @@ export async function runJobSpy(
     const message = error instanceof Error ? error.message : "Unknown error";
     return { success: false, jobs: [], error: message };
   }
+}
+
+function resolveLocations(options: RunJobSpyOptions): string[] {
+  const fromOptions = options.locations?.length ? options.locations : null;
+  const fromSingle = options.location?.trim();
+  const fromEnv = process.env.JOBSPY_LOCATION?.trim();
+  const raw =
+    fromOptions ?? parseSearchCitiesSetting(fromSingle ?? fromEnv ?? "UK");
+  const out = raw.map((value) => value.trim()).filter(Boolean);
+  return out.length > 0 ? out : ["UK"];
 }
 
 function resolveSearchTerms(options: RunJobSpyOptions): string[] {

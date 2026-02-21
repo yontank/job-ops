@@ -116,6 +116,35 @@ describe("discoverJobsStep", () => {
     );
   });
 
+  it("passes serialized multi-city locations to JobSpy", async () => {
+    const settingsRepo = await import("../../repositories/settings");
+    const jobSpy = await import("../../services/jobspy");
+
+    vi.mocked(settingsRepo.getAllSettings).mockResolvedValue({
+      searchTerms: JSON.stringify(["engineer"]),
+      jobspyCountryIndeed: "united kingdom",
+      searchCities: "London|Manchester",
+    } as any);
+
+    vi.mocked(jobSpy.runJobSpy).mockResolvedValue({
+      success: true,
+      jobs: [],
+    } as any);
+
+    await discoverJobsStep({
+      mergedConfig: {
+        ...config,
+        sources: ["linkedin"],
+      },
+    });
+
+    expect(vi.mocked(jobSpy.runJobSpy)).toHaveBeenCalledWith(
+      expect.objectContaining({
+        location: "London|Manchester",
+      }),
+    );
+  });
+
   it("filters out glassdoor for unsupported countries", async () => {
     const settingsRepo = await import("../../repositories/settings");
     const jobSpy = await import("../../services/jobspy");
@@ -201,6 +230,37 @@ describe("discoverJobsStep", () => {
     );
   });
 
+  it("passes configured city locations to adzuna", async () => {
+    const settingsRepo = await import("../../repositories/settings");
+    const adzuna = await import("../../services/adzuna");
+
+    vi.mocked(settingsRepo.getAllSettings).mockResolvedValue({
+      searchTerms: JSON.stringify(["engineer"]),
+      jobspyCountryIndeed: "united kingdom",
+      searchCities: "Leeds|Manchester",
+    } as any);
+
+    vi.mocked(adzuna.runAdzuna).mockResolvedValue({
+      success: true,
+      jobs: [],
+    } as any);
+
+    await discoverJobsStep({
+      mergedConfig: {
+        ...config,
+        sources: ["adzuna"],
+      },
+    });
+
+    expect(vi.mocked(adzuna.runAdzuna)).toHaveBeenCalledWith(
+      expect.objectContaining({
+        country: "gb",
+        countryKey: "united kingdom",
+        locations: ["Leeds", "Manchester"],
+      }),
+    );
+  });
+
   it("skips adzuna for unsupported countries", async () => {
     const settingsRepo = await import("../../repositories/settings");
     const adzuna = await import("../../services/adzuna");
@@ -257,8 +317,42 @@ describe("discoverJobsStep", () => {
     expect(vi.mocked(hiringCafe.runHiringCafe)).toHaveBeenCalledWith(
       expect.objectContaining({
         country: "united states",
+        countryKey: "united states",
+        locations: [],
         searchTerms: ["engineer"],
         maxJobsPerTerm: 25,
+      }),
+    );
+  });
+
+  it("passes configured city locations to hiringcafe", async () => {
+    const settingsRepo = await import("../../repositories/settings");
+    const hiringCafe = await import("../../services/hiring-cafe");
+
+    vi.mocked(settingsRepo.getAllSettings).mockResolvedValue({
+      searchTerms: JSON.stringify(["engineer"]),
+      jobspyCountryIndeed: "united kingdom",
+      jobspyResultsWanted: "25",
+      searchCities: "Leeds|Manchester",
+    } as any);
+
+    vi.mocked(hiringCafe.runHiringCafe).mockResolvedValue({
+      success: true,
+      jobs: [],
+    } as any);
+
+    await discoverJobsStep({
+      mergedConfig: {
+        ...config,
+        sources: ["hiringcafe"],
+      },
+    });
+
+    expect(vi.mocked(hiringCafe.runHiringCafe)).toHaveBeenCalledWith(
+      expect.objectContaining({
+        country: "united kingdom",
+        countryKey: "united kingdom",
+        locations: ["Leeds", "Manchester"],
       }),
     );
   });

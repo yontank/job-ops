@@ -1,3 +1,7 @@
+import {
+  parseSearchCitiesSetting,
+  serializeSearchCitiesSetting,
+} from "@shared/search-cities.js";
 import type { JobSource } from "@shared/types";
 
 export type AutomaticPresetId = "fast" | "balanced" | "detailed";
@@ -8,7 +12,7 @@ export interface AutomaticRunValues {
   searchTerms: string[];
   runBudget: number;
   country: string;
-  glassdoorLocation?: string;
+  cityLocations: string[];
 }
 
 export interface AutomaticPresetValues {
@@ -113,6 +117,29 @@ export function parseSearchTermsInput(input: string): string[] {
     .split(/[\n,]/g)
     .map((value) => value.trim())
     .filter(Boolean);
+}
+
+export function parseCityLocationsInput(input: string): string[] {
+  const parsed = parseSearchTermsInput(input);
+  const seen = new Set<string>();
+  const out: string[] = [];
+  for (const city of parsed) {
+    const key = city.toLowerCase();
+    if (seen.has(key)) continue;
+    seen.add(key);
+    out.push(city);
+  }
+  return out;
+}
+
+export function parseCityLocationsSetting(
+  location: string | null | undefined,
+): string[] {
+  return parseSearchCitiesSetting(location);
+}
+
+export function serializeCityLocationsSetting(cities: string[]): string | null {
+  return serializeSearchCitiesSetting(cities);
 }
 
 export function stringifySearchTerms(terms: string[]): string {

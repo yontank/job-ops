@@ -6,6 +6,7 @@ import { afterAll, beforeEach, describe, expect, it, vi } from "vitest";
 import * as api from "../api";
 import { renderWithQueryClient } from "../test/renderWithQueryClient";
 import { OrchestratorPage } from "./OrchestratorPage";
+import type { AutomaticRunValues } from "./orchestrator/automatic-run";
 import type { FilterTab } from "./orchestrator/constants";
 
 const render = (ui: Parameters<typeof renderWithQueryClient>[0]) =>
@@ -51,14 +52,15 @@ let mockPipelineTerminalEvent: {
   token: number;
 } | null = null;
 let mockPipelineSources = ["linkedin"] as Array<
-  "gradcracker" | "indeed" | "linkedin" | "ukvisajobs"
+  "gradcracker" | "indeed" | "linkedin" | "ukvisajobs" | "adzuna" | "hiringcafe"
 >;
-let mockAutomaticRunValues = {
+let mockAutomaticRunValues: AutomaticRunValues = {
   topN: 12,
   minSuitabilityScore: 55,
   searchTerms: ["backend"],
   runBudget: 150,
   country: "united kingdom",
+  cityLocations: [],
 };
 
 const jobFixture = createJob({
@@ -325,13 +327,7 @@ vi.mock("./orchestrator/RunModeModal", () => ({
   RunModeModal: ({
     onSaveAndRunAutomatic,
   }: {
-    onSaveAndRunAutomatic: (values: {
-      topN: number;
-      minSuitabilityScore: number;
-      searchTerms: string[];
-      runBudget: number;
-      country: string;
-    }) => Promise<void>;
+    onSaveAndRunAutomatic: (values: AutomaticRunValues) => Promise<void>;
   }) => (
     <button
       type="button"
@@ -386,6 +382,7 @@ describe("OrchestratorPage", () => {
       searchTerms: ["backend"],
       runBudget: 150,
       country: "united kingdom",
+      cityLocations: [],
     };
   });
 
@@ -701,7 +698,7 @@ describe("OrchestratorPage", () => {
         ukvisajobsMaxJobs: 150,
         adzunaMaxJobsPerTerm: 150,
         jobspyCountryIndeed: "united kingdom",
-        jobspyLocation: "United Kingdom",
+        searchCities: "United Kingdom",
       });
     });
     expect(api.runPipeline).toHaveBeenCalledWith({
@@ -712,6 +709,108 @@ describe("OrchestratorPage", () => {
     expect(setIntervalSpy).not.toHaveBeenCalledWith(expect.any(Function), 5000);
 
     setIntervalSpy.mockRestore();
+  });
+
+  it("stores multiple cities for JobSpy sources in automatic mode", async () => {
+    window.matchMedia = createMatchMedia(
+      true,
+    ) as unknown as typeof window.matchMedia;
+    mockPipelineSources = ["linkedin"];
+    mockAutomaticRunValues = {
+      topN: 12,
+      minSuitabilityScore: 55,
+      searchTerms: ["backend"],
+      runBudget: 150,
+      country: "united kingdom",
+      cityLocations: ["London", "Manchester"],
+    };
+
+    render(
+      <MemoryRouter initialEntries={["/jobs/ready"]}>
+        <Routes>
+          <Route path="/jobs/:tab" element={<OrchestratorPage />} />
+          <Route path="/jobs/:tab/:jobId" element={<OrchestratorPage />} />
+        </Routes>
+      </MemoryRouter>,
+    );
+
+    fireEvent.click(screen.getByTestId("run-automatic"));
+
+    await waitFor(() => {
+      expect(api.updateSettings).toHaveBeenCalledWith(
+        expect.objectContaining({
+          searchCities: "London|Manchester",
+        }),
+      );
+    });
+  });
+
+  it("stores multiple cities when only adzuna is selected", async () => {
+    window.matchMedia = createMatchMedia(
+      true,
+    ) as unknown as typeof window.matchMedia;
+    mockPipelineSources = ["adzuna"];
+    mockAutomaticRunValues = {
+      topN: 12,
+      minSuitabilityScore: 55,
+      searchTerms: ["backend"],
+      runBudget: 150,
+      country: "united kingdom",
+      cityLocations: ["Leeds", "Manchester"],
+    };
+
+    render(
+      <MemoryRouter initialEntries={["/jobs/ready"]}>
+        <Routes>
+          <Route path="/jobs/:tab" element={<OrchestratorPage />} />
+          <Route path="/jobs/:tab/:jobId" element={<OrchestratorPage />} />
+        </Routes>
+      </MemoryRouter>,
+    );
+
+    fireEvent.click(screen.getByTestId("run-automatic"));
+
+    await waitFor(() => {
+      expect(api.updateSettings).toHaveBeenCalledWith(
+        expect.objectContaining({
+          searchCities: "Leeds|Manchester",
+        }),
+      );
+    });
+  });
+
+  it("stores multiple cities when only hiringcafe is selected", async () => {
+    window.matchMedia = createMatchMedia(
+      true,
+    ) as unknown as typeof window.matchMedia;
+    mockPipelineSources = ["hiringcafe"];
+    mockAutomaticRunValues = {
+      topN: 12,
+      minSuitabilityScore: 55,
+      searchTerms: ["backend"],
+      runBudget: 150,
+      country: "united kingdom",
+      cityLocations: ["Leeds", "Manchester"],
+    };
+
+    render(
+      <MemoryRouter initialEntries={["/jobs/ready"]}>
+        <Routes>
+          <Route path="/jobs/:tab" element={<OrchestratorPage />} />
+          <Route path="/jobs/:tab/:jobId" element={<OrchestratorPage />} />
+        </Routes>
+      </MemoryRouter>,
+    );
+
+    fireEvent.click(screen.getByTestId("run-automatic"));
+
+    await waitFor(() => {
+      expect(api.updateSettings).toHaveBeenCalledWith(
+        expect.objectContaining({
+          searchCities: "Leeds|Manchester",
+        }),
+      );
+    });
   });
 
   it("shows completion toast from hook terminal state", async () => {
@@ -797,6 +896,7 @@ describe("OrchestratorPage", () => {
       searchTerms: ["backend"],
       runBudget: 150,
       country: "united states",
+      cityLocations: [],
     };
 
     render(
