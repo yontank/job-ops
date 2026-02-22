@@ -46,6 +46,12 @@ If you want the serious view of the project, start here:
 - [Extractor System](https://jobops.dakheera47.com/docs/extractors/overview)
 - [Troubleshooting](https://jobops.dakheera47.com/docs/troubleshooting/common-problems)
 
+## Contributing
+
+Want to contribute code, docs, or extractors? Start with [`CONTRIBUTING.md`](./CONTRIBUTING.md).
+
+That guide is intentionally link-first so contributor workflow lives in one place while setup and feature docs stay in the canonical docs site.
+
 ## Quick Start (10 Min)
 
 Prefer guided setup? Follow the [Self-Hosting Guide](https://jobops.dakheera47.com/docs/getting-started/self-hosting).
