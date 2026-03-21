@@ -155,6 +155,7 @@ export interface AppSettings {
   gradcrackerMaxJobsPerTerm: Resolved<number>;
   startupjobsMaxJobsPerTerm: Resolved<number>;
   searchTerms: Resolved<string[]>;
+  workplaceTypes: Resolved<Array<"remote" | "hybrid" | "onsite">>;
   blockedCompanyKeywords: Resolved<string[]>;
   scoringInstructions: Resolved<string>;
   searchCities: Resolved<string>;

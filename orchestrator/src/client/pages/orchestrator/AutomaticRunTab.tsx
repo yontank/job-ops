@@ -17,6 +17,7 @@ import {
 } from "@/components/ui/accordion";
 import { Button } from "@/components/ui/button";
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
+import { Checkbox } from "@/components/ui/checkbox";
 import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
 import { SearchableDropdown } from "@/components/ui/searchable-dropdown";
@@ -35,10 +36,13 @@ import {
   type AutomaticRunValues,
   calculateAutomaticEstimate,
   loadAutomaticRunMemory,
+  normalizeWorkplaceTypes,
   parseCityLocationsInput,
   parseCityLocationsSetting,
   parseSearchTermsInput,
   saveAutomaticRunMemory,
+  WORKPLACE_TYPE_OPTIONS,
+  type WorkplaceType,
 } from "./automatic-run";
 import { TokenizedInput } from "./TokenizedInput";
 
@@ -60,6 +64,7 @@ const DEFAULT_VALUES: AutomaticRunValues = {
   runBudget: 200,
   country: "united kingdom",
   cityLocations: [],
+  workplaceTypes: ["remote", "hybrid", "onsite"],
 };
 
 interface AutomaticRunFormValues {
@@ -69,6 +74,7 @@ interface AutomaticRunFormValues {
   country: string;
   cityLocations: string[];
   cityLocationDraft: string;
+  workplaceTypes: WorkplaceType[];
   searchTerms: string[];
   searchTermDraft: string;
 }
@@ -106,6 +112,11 @@ function toNumber(input: string, min: number, max: number, fallback: number) {
   const parsed = Number.parseInt(input, 10);
   if (Number.isNaN(parsed)) return fallback;
   return Math.min(max, Math.max(min, parsed));
+}
+
+function formatWorkplaceTypeLabel(workplaceType: WorkplaceType): string {
+  if (workplaceType === "onsite") return "Onsite";
+  return workplaceType.charAt(0).toUpperCase() + workplaceType.slice(1);
 }
 
 function getPresetSelection(values: {
@@ -159,6 +170,7 @@ export const AutomaticRunTab: React.FC<AutomaticRunTabProps> = ({
       country: DEFAULT_VALUES.country,
       cityLocations: [],
       cityLocationDraft: "",
+      workplaceTypes: DEFAULT_VALUES.workplaceTypes,
       searchTerms: DEFAULT_VALUES.searchTerms,
       searchTermDraft: "",
     },
@@ -170,6 +182,7 @@ export const AutomaticRunTab: React.FC<AutomaticRunTabProps> = ({
   const countryInput = watch("country");
   const cityLocations = watch("cityLocations");
   const cityLocationDraft = watch("cityLocationDraft");
+  const workplaceTypes = watch("workplaceTypes");
   const searchTerms = watch("searchTerms");
   const searchTermDraft = watch("searchTermDraft");
 
@@ -212,6 +225,9 @@ export const AutomaticRunTab: React.FC<AutomaticRunTabProps> = ({
         normalizeCountryKey(location) !==
         normalizeCountryKey(rememberedCountryKey),
     );
+    const rememberedWorkplaceTypes = normalizeWorkplaceTypes(
+      settings?.workplaceTypes?.value,
+    );
 
     reset({
       topN: String(topN),
@@ -220,6 +236,7 @@ export const AutomaticRunTab: React.FC<AutomaticRunTabProps> = ({
       country: rememberedCountry || DEFAULT_VALUES.country,
       cityLocations: rememberedLocations,
       cityLocationDraft: "",
+      workplaceTypes: rememberedWorkplaceTypes,
       searchTerms: settings?.searchTerms?.value ?? DEFAULT_VALUES.searchTerms,
       searchTermDraft: "",
     });
@@ -239,6 +256,7 @@ export const AutomaticRunTab: React.FC<AutomaticRunTabProps> = ({
       runBudget: toNumber(runBudgetInput, 1, 1000, DEFAULT_VALUES.runBudget),
       country: normalizedCountry || DEFAULT_VALUES.country,
       cityLocations,
+      workplaceTypes: normalizeWorkplaceTypes(workplaceTypes),
       searchTerms,
     };
   }, [
@@ -247,8 +265,11 @@ export const AutomaticRunTab: React.FC<AutomaticRunTabProps> = ({
     runBudgetInput,
     countryInput,
     cityLocations,
+    workplaceTypes,
     searchTerms,
   ]);
+
+  const workplaceTypeSelectionInvalid = workplaceTypes.length === 0;
 
   const isSourceAvailableForRun = useCallback(
     (source: JobSource) => {
@@ -269,6 +290,15 @@ export const AutomaticRunTab: React.FC<AutomaticRunTabProps> = ({
     () => pipelineSources.filter((source) => isSourceAvailableForRun(source)),
     [pipelineSources, isSourceAvailableForRun],
   );
+
+  const hasOnlyRemoteWorkplaceType =
+    workplaceTypes.length === 1 && workplaceTypes[0] === "remote";
+  const hasJobSpySourceSelected = compatiblePipelineSources.some(
+    (source) =>
+      source === "indeed" || source === "linkedin" || source === "glassdoor",
+  );
+  const showJobSpyWorkplaceWarning =
+    hasJobSpySourceSelected && !hasOnlyRemoteWorkplaceType;
 
   useEffect(() => {
     const filtered = pipelineSources.filter((source) =>
@@ -307,7 +337,19 @@ export const AutomaticRunTab: React.FC<AutomaticRunTabProps> = ({
     isPipelineRunning ||
     isSaving ||
     compatiblePipelineSources.length === 0 ||
-    values.searchTerms.length === 0;
+    values.searchTerms.length === 0 ||
+    workplaceTypeSelectionInvalid;
+
+  const toggleWorkplaceType = (
+    workplaceType: WorkplaceType,
+    checked: boolean,
+  ) => {
+    const next = checked
+      ? normalizeWorkplaceTypes([...workplaceTypes, workplaceType])
+      : workplaceTypes.filter((value) => value !== workplaceType);
+
+    setValue("workplaceTypes", next, { shouldDirty: true });
+  };
 
   const applyPreset = (presetId: AutomaticPresetId) => {
     const preset = AUTOMATIC_PRESETS[presetId];
@@ -472,6 +514,55 @@ export const AutomaticRunTab: React.FC<AutomaticRunTabProps> = ({
                         helperText="Optional for all sources, required when Glassdoor is selected."
                         removeLabelPrefix="Remove city"
                       />
+                    </div>
+                    <div className="space-y-2 md:col-span-3">
+                      <Label>Workplace type</Label>
+                      <div className="flex flex-wrap gap-4">
+                        {WORKPLACE_TYPE_OPTIONS.map((workplaceType) => {
+                          const checkboxId = `workplace-type-${workplaceType}`;
+                          const checked =
+                            workplaceTypes.includes(workplaceType);
+                          return (
+                            <div
+                              key={workplaceType}
+                              className="flex items-center gap-2"
+                            >
+                              <Checkbox
+                                id={checkboxId}
+                                checked={checked}
+                                onCheckedChange={(nextChecked) => {
+                                  toggleWorkplaceType(
+                                    workplaceType,
+                                    nextChecked === true,
+                                  );
+                                }}
+                              />
+                              <label
+                                htmlFor={checkboxId}
+                                className="cursor-pointer text-sm font-medium"
+                              >
+                                {formatWorkplaceTypeLabel(workplaceType)}
+                              </label>
+                            </div>
+                          );
+                        })}
+                      </div>
+                      <p className="text-xs text-muted-foreground">
+                        Applies globally to all search terms and locations in
+                        this run.
+                      </p>
+                      {workplaceTypeSelectionInvalid ? (
+                        <p className="text-xs text-destructive">
+                          Select at least one workplace type.
+                        </p>
+                      ) : null}
+                      {showJobSpyWorkplaceWarning ? (
+                        <p className="text-xs text-amber-600 dark:text-amber-400">
+                          Indeed, LinkedIn, and Glassdoor only support strict
+                          remote filtering. Hybrid or Onsite selections will
+                          broaden those source results.
+                        </p>
+                      ) : null}
                     </div>
                   </div>
                 </AccordionContent>

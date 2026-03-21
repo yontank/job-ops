@@ -87,6 +87,19 @@ describe("settingsRegistry helpers", () => {
       );
       expect(settingsRegistry.searchTerms.serialize(null)).toBeNull();
     });
+
+    it("parses valid workplace type arrays", () => {
+      expect(
+        settingsRegistry.workplaceTypes.parse('["remote","onsite"]'),
+      ).toEqual(["remote", "onsite"]);
+    });
+
+    it("rejects invalid workplace type arrays", () => {
+      expect(
+        settingsRegistry.workplaceTypes.parse('["remote","satellite"]'),
+      ).toBeNull();
+      expect(settingsRegistry.workplaceTypes.parse("[]")).toBeNull();
+    });
   });
 
   describe("Resume projects settings", () => {

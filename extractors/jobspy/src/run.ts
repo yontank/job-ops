@@ -128,6 +128,7 @@ export interface RunJobSpyOptions {
   searchTerms?: string[];
   location?: string;
   locations?: string[];
+  workplaceTypes?: Array<"remote" | "hybrid" | "onsite">;
   resultsWanted?: number;
   hoursOld?: number;
   countryIndeed?: string;
@@ -140,6 +141,14 @@ export interface JobSpyResult {
   success: boolean;
   jobs: CreateJobInput[];
   error?: string;
+}
+
+export function deriveIsRemoteFlag(
+  workplaceTypes: Array<"remote" | "hybrid" | "onsite"> | undefined,
+): boolean | undefined {
+  return workplaceTypes?.length === 1 && workplaceTypes[0] === "remote"
+    ? true
+    : undefined;
 }
 
 export async function runJobSpy(
@@ -224,7 +233,10 @@ export async function runJobSpy(
                   "1",
               ),
               JOBSPY_IS_REMOTE: String(
-                options.isRemote ?? process.env.JOBSPY_IS_REMOTE ?? "0",
+                options.isRemote ??
+                  deriveIsRemoteFlag(options.workplaceTypes) ??
+                  process.env.JOBSPY_IS_REMOTE ??
+                  "0",
               ),
               JOBSPY_OUTPUT_CSV: outputCsv,
               JOBSPY_OUTPUT_JSON: outputJson,

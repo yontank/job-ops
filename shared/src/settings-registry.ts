@@ -90,6 +90,35 @@ function createEnumParser<const TValues extends readonly [string, ...string[]]>(
   };
 }
 
+function createEnumArrayParser<
+  const TValues extends readonly [string, ...string[]],
+>(values: TValues): (raw: string | undefined) => TValues[number][] | null {
+  const allowedValues = new Set<string>(values);
+
+  return (raw: string | undefined): TValues[number][] | null => {
+    if (!raw) return null;
+    try {
+      const parsed = JSON.parse(raw) as unknown;
+      if (!Array.isArray(parsed)) return null;
+
+      const out: TValues[number][] = [];
+      const seen = new Set<string>();
+      for (const value of parsed) {
+        if (typeof value !== "string" || !allowedValues.has(value)) {
+          return null;
+        }
+        if (seen.has(value)) continue;
+        seen.add(value);
+        out.push(value as TValues[number]);
+      }
+      if (out.length === 0) return null;
+      return out;
+    } catch {
+      return null;
+    }
+  };
+}
+
 const parseChatStyleLanguageModeOrNull = createEnumParser(
   CHAT_STYLE_LANGUAGE_MODE_VALUES,
 );
@@ -97,6 +126,9 @@ const parseChatStyleLanguageModeOrNull = createEnumParser(
 const parseChatStyleManualLanguageOrNull = createEnumParser(
   CHAT_STYLE_MANUAL_LANGUAGE_VALUES,
 );
+
+const WORKPLACE_TYPE_VALUES = ["remote", "hybrid", "onsite"] as const;
+const parseWorkplaceTypesOrNull = createEnumArrayParser(WORKPLACE_TYPE_VALUES);
 
 export const resumeProjectsSchema = z.object({
   maxProjects: z.number().int().min(0).max(100),
@@ -269,6 +301,17 @@ export const settingsRegistry = {
         .map((v) => v.trim())
         .filter(Boolean),
     parse: parseJsonArrayOrNull,
+    serialize: serializeNullableJsonArray,
+  },
+  workplaceTypes: {
+    kind: "typed" as const,
+    schema: z.array(z.enum(WORKPLACE_TYPE_VALUES)).min(1).max(3),
+    default: (): Array<(typeof WORKPLACE_TYPE_VALUES)[number]> => [
+      "remote",
+      "hybrid",
+      "onsite",
+    ],
+    parse: parseWorkplaceTypesOrNull,
     serialize: serializeNullableJsonArray,
   },
   blockedCompanyKeywords: {
